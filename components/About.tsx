@@ -29,12 +29,29 @@ export default function About() {
               real-time web applications to designing synchronous RTL
               architectures on FPGAs and exploring out-of-order
               microarchitectures with gem5. I&apos;m passionate about the
-              intersection of software and silicon.
+              intersection of software and hardware.
             </p>
             <p>
-              Outside of engineering, I&apos;m fluent in Mandarin, AutoCAD
-              Certified, and love to gym and lift heavy things. I also love
-              to eat! Add me on beli @echen823
+              I also enjoy tackling{" "}
+              <a
+                href="https://www.janestreet.com/puzzles/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent-light hover:underline"
+              >
+                Jane Street puzzles
+              </a>{" "}
+              — check out some of my{" "}
+              <a
+                href="https://github.com/EricChen8231/puzzle"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent-light hover:underline"
+              >
+                solutions on GitHub
+              </a>
+              . Outside of engineering, I love to work out and try new
+              recipes and restaurants. Add me on Beli @echen823!
             </p>
           </motion.div>
 

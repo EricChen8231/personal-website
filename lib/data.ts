@@ -71,6 +71,18 @@ export const experiences: Experience[] = [
 
 export const softwareProjects: Project[] = [
   {
+    title: "SFT for Code Generation",
+    tech: ["Python", "C++", "Go"],
+    date: "In Progress",
+    category: "software",
+    description:
+      "Supervised fine-tuning of an LLM for code generation using gold-standard demonstrations from open-source projects.",
+    bullets: [
+      "Curating gold-standard code demonstrations from open-source repositories across Python, C++, and Go.",
+      "Fine-tuning a language model with supervised learning to improve code generation quality and correctness.",
+    ],
+  },
+  {
     title: "Game Resource Detection System",
     tech: ["Python", "PyTorch", "YOLOv11", "OpenCV"],
     date: "Jul 2025",
@@ -116,17 +128,17 @@ export const softwareProjects: Project[] = [
 
 export const hardwareProjects: Project[] = [
   {
-    title: "Synchronous RTL Design on Artix-7 FPGA",
+    title: "Battleship on FPGA with VGA Output",
     tech: ["Verilog", "Nexys A7", "Vivado"],
-    date: "Spring 2026",
+    date: "Spring 2025",
     category: "hardware",
     description:
-      "Fully synchronous RTL architecture at 100 MHz on Xilinx Artix-7 with timing closure.",
+      "Fully synchronous Battleship game implemented in RTL at 100 MHz on Xilinx Artix-7, displayed via VGA.",
     bullets: [
-      "Designed and implemented a fully synchronous RTL architecture operating at 100 MHz on Xilinx Artix-7 FPGA.",
+      "Implemented a Battleship game as a fully synchronous RTL architecture operating at 100 MHz on Xilinx Artix-7 FPGA.",
+      "Drove a VGA monitor for real-time game display, handling pixel timing and frame rendering in hardware.",
       "Partitioned datapath and control; implemented parameterized FSMs with deterministic state transitions.",
-      "Developed a self-checking testbench and performed waveform-level debugging in ModelSim/Vivado.",
-      "Conducted static timing analysis and achieved timing closure with positive slack.",
+      "Developed a self-checking testbench and achieved timing closure with positive slack via static timing analysis.",
     ],
   },
   {
