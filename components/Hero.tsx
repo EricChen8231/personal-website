@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { ArrowDown, Mail } from "lucide-react";
 
 const titles = ["Computer Engineer", "Software Developer", "EE Researcher"];
@@ -46,14 +46,20 @@ export default function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-4 h-8"
+          className="mt-4 h-8 overflow-hidden"
         >
-          <span
-            key={titleIndex}
-            className="inline-block text-xl text-muted sm:text-2xl"
-          >
-            {titles[titleIndex]}
-          </span>
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={titleIndex}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.35, ease: "easeInOut" }}
+              className="inline-block text-xl text-muted sm:text-2xl"
+            >
+              {titles[titleIndex]}
+            </motion.span>
+          </AnimatePresence>
         </motion.div>
 
         <motion.p

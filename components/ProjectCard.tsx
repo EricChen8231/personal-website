@@ -56,6 +56,17 @@ export default function ProjectCard({
         {project.description}
       </p>
 
+      {project.bullets && project.bullets.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {project.bullets.map((bullet, i) => (
+            <li key={i} className="flex gap-2 text-sm text-muted">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
+              {bullet}
+            </li>
+          ))}
+        </ul>
+      )}
+
       <div className="mt-4 flex flex-wrap gap-2">
         {project.tech.map((t) => (
           <span
