@@ -1,7 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { ExternalLink, Github } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ExternalLink, Github, ChevronDown } from "lucide-react";
 import type { Project } from "@/lib/data";
 
 export default function ProjectCard({
@@ -11,6 +12,9 @@ export default function ProjectCard({
   project: Project;
   index: number;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasBullets = project.bullets && project.bullets.length > 0;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -56,15 +60,41 @@ export default function ProjectCard({
         {project.description}
       </p>
 
-      {project.bullets && project.bullets.length > 0 && (
-        <ul className="mt-3 space-y-1.5">
-          {project.bullets.map((bullet, i) => (
-            <li key={i} className="flex gap-2 text-sm text-muted">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
-              {bullet}
-            </li>
-          ))}
-        </ul>
+      {hasBullets && (
+        <>
+          <AnimatePresence initial={false}>
+            {expanded && (
+              <motion.ul
+                key="bullets"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                className="overflow-hidden mt-3 space-y-1.5"
+              >
+                {project.bullets.map((bullet, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-muted">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
+                    {bullet}
+                  </li>
+                ))}
+              </motion.ul>
+            )}
+          </AnimatePresence>
+
+          <button
+            onClick={() => setExpanded((prev) => !prev)}
+            className="mt-3 flex items-center gap-1 text-xs text-accent-light/70 transition-colors hover:text-accent-light"
+          >
+            <motion.span
+              animate={{ rotate: expanded ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ChevronDown size={14} />
+            </motion.span>
+            {expanded ? "Hide details" : "Show details"}
+          </button>
+        </>
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
