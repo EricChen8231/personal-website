@@ -16,9 +16,23 @@ const bricolageGrotesque = Bricolage_Grotesque({
   display: 'swap',
 });
 
+const SITE_URL = 'https://ericchen8231.github.io/personal-website';
+
 export const metadata: Metadata = {
   title: 'Eric Chen — The Stack',
   description: 'Full-stack engineer — literally. From 45nm CMOS cells to production APIs.',
+  openGraph: {
+    title: 'Eric Chen — The Stack',
+    description: 'Full-stack engineer — literally. From 45nm CMOS cells to production APIs.',
+    url: SITE_URL,
+    siteName: 'Eric Chen',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Eric Chen — The Stack',
+    description: 'Full-stack engineer — literally. From 45nm CMOS cells to production APIs.',
+  },
+  metadataBase: new URL(SITE_URL),
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

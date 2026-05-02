@@ -116,22 +116,27 @@ export default function StackClient() {
       sigX.clearRect(0, 0, W, H);
       const pt = 50, pb = 50, th = H - pt - pb, tx = W / 2;
       sigT += .01;
-      sigX.strokeStyle = 'rgba(24,24,27,.1)'; sigX.lineWidth = 1;
+      const cs = getComputedStyle(document.documentElement);
+      const cTrack = cs.getPropertyValue('--sig-track').trim();
+      const cFill  = cs.getPropertyValue('--sig-fill').trim();
+      const cDot   = cs.getPropertyValue('--sig-dot').trim();
+      const cDim   = cs.getPropertyValue('--sig-dot-dim').trim();
+      sigX.strokeStyle = cTrack; sigX.lineWidth = 1;
       sigX.beginPath(); sigX.moveTo(tx, pt); sigX.lineTo(tx, pt + th); sigX.stroke();
       const fh = th * scrollProgRef.current;
-      sigX.strokeStyle = 'rgba(24,24,27,.45)'; sigX.lineWidth = 2;
+      sigX.strokeStyle = cFill; sigX.lineWidth = 2;
       sigX.beginPath(); sigX.moveTo(tx, pt); sigX.lineTo(tx, pt + fh); sigX.stroke();
       LAYERS.forEach((l, i) => {
         const ny = pt + (i / (LAYERS.length - 1)) * th;
         const act = scrollProgRef.current >= (i / (LAYERS.length - 1)) - .04;
-        sigX.fillStyle = act ? 'rgba(24,24,27,.85)' : 'rgba(24,24,27,.18)';
+        sigX.fillStyle = act ? cDot : cDim;
         sigX.beginPath(); sigX.arc(tx, ny, act ? 5 : 3, 0, Math.PI * 2); sigX.fill();
-        sigX.fillStyle = act ? 'rgba(24,24,27,.5)' : 'rgba(24,24,27,.18)';
+        sigX.fillStyle = act ? cFill : cDim;
         sigX.font = '7px Courier New'; sigX.textAlign = 'center'; sigX.fillText(`L${l.id}`, tx, ny + 13);
       });
       const dy = pt + th * scrollProgRef.current, pr = 3 + Math.sin(sigT * Math.PI * 6) * 1.5;
-      sigX.fillStyle = 'rgba(24,24,27,.12)'; sigX.beginPath(); sigX.arc(tx, dy, pr * 2.5, 0, Math.PI * 2); sigX.fill();
-      sigX.fillStyle = '#18181b'; sigX.beginPath(); sigX.arc(tx, dy, pr * .55, 0, Math.PI * 2); sigX.fill();
+      sigX.fillStyle = cTrack; sigX.beginPath(); sigX.arc(tx, dy, pr * 2.5, 0, Math.PI * 2); sigX.fill();
+      sigX.fillStyle = cDot;   sigX.beginPath(); sigX.arc(tx, dy, pr * .55, 0, Math.PI * 2); sigX.fill();
       rafId = requestAnimationFrame(renderSig);
     }
     renderSig();
@@ -176,6 +181,12 @@ export default function StackClient() {
           setTimeout(() => termLine(h, c || 't-info'), i * 190)
         );
       }
+      // Layer nav visibility + active item
+      const layerNav = document.getElementById('layer-nav');
+      if (layerNav) layerNav.classList.toggle('visible', window.scrollY > window.innerHeight * 0.5);
+      document.querySelectorAll<HTMLElement>('.ln-item').forEach(el => {
+        el.classList.toggle('active', parseInt(el.dataset.layer!) === active);
+      });
     }
     window.addEventListener('scroll', onScroll, { passive: true });
     const interval = setInterval(onScroll, 120);
@@ -231,11 +242,42 @@ export default function StackClient() {
       const B = Math.max(0, Math.min(15, parseInt(bEl.value) || 0));
       setL2Inputs(A, B);
       const s = A + B;
-      const pad = (n: number, l: number) => n.toString(2).padStart(l, '0');
+      const pad = (n: number, bits: number) => n.toString(2).padStart(bits, '0');
       const resultEl = document.getElementById('l2-result');
       const binaryEl = document.getElementById('l2-binary');
       if (resultEl) resultEl.textContent = String(s);
-      if (binaryEl) binaryEl.innerHTML = `${pad(A, 4)} + ${pad(B, 4)} = ${pad(s, 5)}&nbsp;&nbsp;(${s > 15 ? 'overflow, Cout=1' : 'no overflow'})`;
+      if (binaryEl) {
+        // Ripple-carry chain: index 0 = LSB
+        const aBits = [0,1,2,3].map(i => (A >> i) & 1);
+        const bBits = [0,1,2,3].map(i => (B >> i) & 1);
+        const carries = [0,0,0,0,0]; // carries[i] = carry into bit i
+        const sumBits = [0,0,0,0];
+        for (let i = 0; i < 4; i++) {
+          sumBits[i] = aBits[i] ^ bBits[i] ^ carries[i];
+          carries[i+1] = (aBits[i] & bBits[i]) | (aBits[i] & carries[i]) | (bBits[i] & carries[i]);
+        }
+        const cols = [3,2,1,0];
+        const td  = (v: string|number, cls?: string) =>
+          '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + v + '</td>';
+        const hdr = '<tr>' + td('', 'row-label') +
+          cols.map(i => '<td style="font-size:9px;color:var(--text4)">b' + i + '</td>').join('') + '</tr>';
+        const aRow = '<tr>' + td('A:', 'row-label') +
+          cols.map(i => td(aBits[i])).join('') + '</tr>';
+        const bRow = '<tr>' + td('B:', 'row-label') +
+          cols.map(i => td(bBits[i])).join('') + '</tr>';
+        const cRow = '<tr>' + td('C<sub>i</sub>:', 'row-label') +
+          cols.map(i => td(carries[i], 'c-bit' + (carries[i] ? ' active' : ''))).join('') + '</tr>';
+        const sRow = '<tr class="sum-row">' + td('Sum:', 'row-label') +
+          cols.map(i => td(sumBits[i])).join('') +
+          '<td class="cout-cell" style="font-size:9px;padding-left:4px">C=' + carries[4] + '</td></tr>';
+        binaryEl.innerHTML =
+          '<table class="carry-table">' + hdr + aRow + bRow + cRow + sRow + '</table>' +
+          '<div style="margin-top:5px;font-size:10px;color:var(--text4);' +
+          'font-family:\'Courier New\',monospace">' +
+          pad(A, 4) + ' + ' + pad(B, 4) + ' = ' + carries[4] +
+          cols.map(i => sumBits[i]).join('') +
+          '&nbsp;&nbsp;(' + (s > 15 ? 'Cout=1, overflow' : 'no overflow') + ')</div>';
+      }
     }
     const aEl = document.getElementById('l2-a');
     const bEl = document.getElementById('l2-b');
@@ -248,9 +290,42 @@ export default function StackClient() {
     };
   }, []);
 
+  // ── Dark mode toggle ──
+  useEffect(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark') document.documentElement.classList.add('dark');
+    const btn = document.getElementById('theme-btn') as HTMLButtonElement | null;
+    function setIcon() {
+      if (btn) btn.textContent = document.documentElement.classList.contains('dark') ? '○' : '◐';
+    }
+    setIcon();
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+      setIcon();
+    }
+    btn?.addEventListener('click', toggleTheme);
+    return () => btn?.removeEventListener('click', toggleTheme);
+  }, []);
+
+  // ── Mobile panel toggle ──
+  useEffect(() => {
+    const btn = document.getElementById('panel-toggle');
+    const panel = document.getElementById('right-panel');
+    function togglePanel() { panel?.classList.toggle('panel-open'); }
+    btn?.addEventListener('click', togglePanel);
+    return () => btn?.removeEventListener('click', togglePanel);
+  }, []);
+
   return (
     <>
       <canvas id="bg-canvas" ref={bgRef} />
+      <button id="panel-toggle">&#8801; terminal</button>
+      <nav id="layer-nav">
+        {LAYERS.map(l => (
+          <a key={l.id} href={`#sec-l${l.id}`} className="ln-item" data-layer={String(l.id)}>L{l.id}</a>
+        ))}
+      </nav>
       <div id="right-panel">
         <div id="sig-wrap"><canvas id="signal-canvas" ref={sigRef} /></div>
         <div id="terminal">
@@ -259,6 +334,7 @@ export default function StackClient() {
             <div className="term-dot" style={{ background: '#f59e0b' }} />
             <div className="term-dot" style={{ background: '#22c55e' }} />
             <span style={{ marginLeft: 5 }}>eric@stack — zsh</span>
+            <button id="theme-btn">&#9680;</button>
           </div>
           <div id="term-body">
             <div><span className="t-dim">~ % </span><span id="typed-init" /><span id="term-cursor" /></div>

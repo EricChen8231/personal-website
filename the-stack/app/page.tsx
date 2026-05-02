@@ -1,16 +1,53 @@
 import StackClient from '@/components/StackClient';
 
+const MONO = "'Courier New', monospace";
+
+const STACK_ROWS = [
+  ['L7', 'Application', 'full-stack APIs · ML pipelines · CUDA inference'],
+  ['L6', 'Network',     'TCP/IP · routing protocols · raw packet I/O'],
+  ['L5', 'Compiler',    'C · C++ · Rust · Python · TypeScript · RISC-V ASM'],
+  ['L4', 'Arch',        'OoO pipelines · branch prediction · gem5 research'],
+  ['L3', 'RTL',         'Verilog · FPGA · Artix-7 · 100 MHz timing closure'],
+  ['L2', 'Circuit',     'CMOS cells · Cadence Virtuoso · SPICE extraction'],
+  ['L1', 'Physics',     '45nm MOSFET · Vth · gm/ID methodology'],
+] as const;
+
+const HERO_TAGS = [
+  'C / C++', 'CUDA', 'Python', 'SystemVerilog', 'TypeScript', 'RISC-V', 'Verilog',
+];
+
 export default function Page() {
   return (
     <>
       <StackClient />
       <div id="content">
+
         {/* ── HERO ── */}
         <section id="hero">
           <div className="hero-eyebrow">Portfolio · The Stack</div>
           <div className="hero-name">Eric Chen</div>
-          <div className="hero-tagline"><strong>Full-stack engineer</strong> — literally.<br />From 45nm CMOS cells to production APIs.</div>
+          <div className="hero-tagline">
+            <strong>Full-stack engineer</strong> — literally.<br />
+            From 45nm CMOS cells to production APIs.
+          </div>
           <div className="hero-meta">USC Viterbi · B.S. CECS · M.S. EE</div>
+
+          {/* Status row */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 10, fontFamily: MONO, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', display: 'inline-block', flexShrink: 0 }} />
+              available for full-time
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--text4)', fontFamily: MONO }}>· Los Angeles, CA</span>
+          </div>
+
+          {/* Tech tags */}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 14 }}>
+            {HERO_TAGS.map(t => (
+              <span key={t} className="tag">{t}</span>
+            ))}
+          </div>
+
           <div className="hero-divider" />
           <div className="hero-prompt">
             <span style={{ color: 'var(--text4)' }}>%</span>
@@ -35,6 +72,7 @@ export default function Page() {
                 <div className="project-name">Parallel MCCFR — NLH Poker Solver</div>
                 <div className="project-tech">CUDA C++ · OpenMP · A100 GPUs</div>
                 <div className="project-desc">CUDA C++ implementation of External-Sampling MCCFR (CFR+) for No-Limit Texas Hold&apos;em. GPU-batched self-play to train Nash equilibrium strategies.</div>
+                <a href="https://github.com/ericchen8231/cuda-mccfr" target="_blank" rel="noopener noreferrer" className="project-link">github ↗</a>
               </div>
               <div className="project-item">
                 <div className="project-name">This site</div>
@@ -43,7 +81,7 @@ export default function Page() {
               </div>
             </div>
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 10, color: 'var(--text4)', fontFamily: "'Courier New', monospace" }}>open to:</span>
+              <span style={{ fontSize: 10, color: 'var(--text4)', fontFamily: MONO }}>open to:</span>
               <span className="tag active">Systems Eng</span>
               <span className="tag active">Hardware Design</span>
               <span className="tag active">ML Infra</span>
@@ -185,21 +223,23 @@ export default function Page() {
             <div className="section-sub">where electrons become logic</div>
             <div className="section-desc">CMOS standard cells, op-amp topologies, and the analog world underlying every digital abstraction.</div>
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', marginBottom: 14, background: 'var(--bg2)' }}>
-              <div style={{ fontSize: 10, color: 'var(--text4)', fontFamily: "'Courier New', monospace", letterSpacing: 1, marginBottom: 9 }}>TRY THE ADDER →</div>
+              <div style={{ fontSize: 10, color: 'var(--text4)', fontFamily: MONO, letterSpacing: 1, marginBottom: 9 }}>TRY THE ADDER →</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <span style={{ fontSize: 9, color: 'var(--text4)', fontFamily: "'Courier New', monospace" }}>A (0–15)</span>
-                  <input id="l2-a" type="number" min={0} max={15} defaultValue={6} style={{ width: 60, padding: '5px 8px', border: '1px solid var(--border2)', borderRadius: 4, fontSize: 12, fontFamily: "'Courier New', monospace", background: 'var(--card)', color: 'var(--text)' }} />
+                  <span style={{ fontSize: 9, color: 'var(--text4)', fontFamily: MONO }}>A (0–15)</span>
+                  <input id="l2-a" type="number" min={0} max={15} defaultValue={6}
+                    style={{ width: 60, padding: '5px 8px', border: '1px solid var(--border2)', borderRadius: 4, fontSize: 12, fontFamily: MONO, background: 'var(--card)', color: 'var(--text)' }} />
                 </div>
                 <div style={{ fontSize: 18, color: 'var(--text3)', paddingTop: 14 }}>+</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <span style={{ fontSize: 9, color: 'var(--text4)', fontFamily: "'Courier New', monospace" }}>B (0–15)</span>
-                  <input id="l2-b" type="number" min={0} max={15} defaultValue={5} style={{ width: 60, padding: '5px 8px', border: '1px solid var(--border2)', borderRadius: 4, fontSize: 12, fontFamily: "'Courier New', monospace", background: 'var(--card)', color: 'var(--text)' }} />
+                  <span style={{ fontSize: 9, color: 'var(--text4)', fontFamily: MONO }}>B (0–15)</span>
+                  <input id="l2-b" type="number" min={0} max={15} defaultValue={5}
+                    style={{ width: 60, padding: '5px 8px', border: '1px solid var(--border2)', borderRadius: 4, fontSize: 12, fontFamily: MONO, background: 'var(--card)', color: 'var(--text)' }} />
                 </div>
-                <div style={{ paddingTop: 14, fontSize: 12, color: 'var(--text3)', fontFamily: "'Courier New', monospace" }}>=</div>
-                <div id="l2-result" style={{ paddingTop: 14, fontSize: 13, fontFamily: "'Courier New', monospace", color: 'var(--text)', fontWeight: 600 }} />
+                <div style={{ paddingTop: 14, fontSize: 12, color: 'var(--text3)', fontFamily: MONO }}>=</div>
+                <div id="l2-result" style={{ paddingTop: 14, fontSize: 13, fontFamily: MONO, color: 'var(--text)', fontWeight: 600 }} />
               </div>
-              <div id="l2-binary" style={{ marginTop: 8, fontSize: 10, fontFamily: "'Courier New', monospace", color: 'var(--text3)', lineHeight: 1.8 }} />
+              <div id="l2-binary" style={{ marginTop: 8, fontSize: 10, fontFamily: MONO, color: 'var(--text3)', lineHeight: 1.8 }} />
             </div>
             <div className="project-list">
               <div className="project-item">
@@ -257,18 +297,53 @@ export default function Page() {
         </section>
 
         {/* ── FOOTER ── */}
-        <section style={{ minHeight: '45vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, position: 'relative', zIndex: 5 }}>
-          <div style={{ textAlign: 'center', maxWidth: 460 }}>
-            <div style={{ fontFamily: "'Courier New', monospace", fontSize: 10, color: 'var(--text4)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 18 }}>End of stack trace</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 800, color: 'var(--text)', letterSpacing: -1, marginBottom: 10 }}>Let&apos;s build something.</div>
-            <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 30, lineHeight: 1.7 }}>From bare silicon to production — I work across the full stack, literally.</div>
+        <section style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 40px', position: 'relative', zIndex: 5 }}>
+          <div style={{ textAlign: 'center', maxWidth: 560, width: '100%' }}>
+
+            {/* Stack summary */}
+            <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 18px', marginBottom: 40, textAlign: 'left' }}>
+              <div style={{ fontSize: 9, color: 'var(--text4)', fontFamily: MONO, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 10 }}>
+                7-layer stack trace
+              </div>
+              {STACK_ROWS.map(([id, name, desc]) => (
+                <div key={id} style={{ display: 'flex', gap: 10, padding: '4px 0', borderBottom: '1px solid var(--border2)', fontFamily: MONO }}>
+                  <span style={{ fontSize: 9, color: 'var(--text4)', width: 18, flexShrink: 0 }}>{id}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text2)', width: 74, flexShrink: 0 }}>{name}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text3)' }}>{desc}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--text4)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 18 }}>
+              End of stack trace
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 800, color: 'var(--text)', letterSpacing: -1, marginBottom: 10 }}>
+              Let&apos;s build something.
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 30, lineHeight: 1.7 }}>
+              From bare silicon to production — I work across the full stack, literally.
+            </div>
             <div style={{ display: 'flex', gap: 9, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <a href="mailto:echen823@usc.edu" style={{ color: 'var(--text)', textDecoration: 'none', fontSize: 12, border: '1px solid var(--border2)', padding: '9px 20px', borderRadius: 6, fontFamily: "'Courier New', monospace" }}>echen823@usc.edu ↗</a>
-              <a href="https://linkedin.com/in/ericchen823" style={{ color: 'var(--text2)', textDecoration: 'none', fontSize: 12, border: '1px solid var(--border)', padding: '9px 20px', borderRadius: 6, fontFamily: "'Courier New', monospace" }}>linkedin ↗</a>
-              <a href="https://github.com/ericchen8231" style={{ color: 'var(--text2)', textDecoration: 'none', fontSize: 12, border: '1px solid var(--border)', padding: '9px 20px', borderRadius: 6, fontFamily: "'Courier New', monospace" }}>github ↗</a>
+              <a href="mailto:echen823@usc.edu"
+                style={{ color: 'var(--text)', textDecoration: 'none', fontSize: 12, border: '1px solid var(--border2)', padding: '9px 20px', borderRadius: 6, fontFamily: MONO }}>
+                echen823@usc.edu ↗
+              </a>
+              <a href="https://linkedin.com/in/ericchen823" target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--text2)', textDecoration: 'none', fontSize: 12, border: '1px solid var(--border)', padding: '9px 20px', borderRadius: 6, fontFamily: MONO }}>
+                linkedin ↗
+              </a>
+              <a href="https://github.com/ericchen8231" target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--text2)', textDecoration: 'none', fontSize: 12, border: '1px solid var(--border)', padding: '9px 20px', borderRadius: 6, fontFamily: MONO }}>
+                github ↗
+              </a>
+              <a href="/personal-website/resume.pdf" target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--text2)', textDecoration: 'none', fontSize: 12, border: '1px solid var(--border)', padding: '9px 20px', borderRadius: 6, fontFamily: MONO }}>
+                resume ↗
+              </a>
             </div>
           </div>
         </section>
+
       </div>
     </>
   );
