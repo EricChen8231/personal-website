@@ -1,15 +1,22 @@
 # Eric Chen — Personal Portfolio
 
-My personal portfolio website built with **Next.js**, **Tailwind CSS**, and **Framer Motion**.
-
-Showcases my experience, projects (software & hardware/EE), skills, and contact info.
+Portfolio built with **Next.js** in **`the-stack/`** — static export, deployed to GitHub Pages via Actions.
 
 **Live:** [ericchen8231.github.io/personal-website](https://ericchen8231.github.io/personal-website/)
 
-## Tech Stack
+## Local dev
 
-- Next.js 16 (App Router, static export)
-- Tailwind CSS v4
-- Framer Motion
-- Lucide React
-- Deployed on GitHub Pages via GitHub Actions
+```bash
+cd the-stack && npm install && npm run dev
+```
+
+From repo root (same commands):
+
+```bash
+npm install --prefix the-stack
+npm run dev
+```
+
+## Deploy
+
+Push to `main`. The workflow builds `the-stack/` and publishes `the-stack/out` to GitHub Pages.
