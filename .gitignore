@@ -21,3 +21,6 @@ npm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local working copy of the resume; the deployable copy lives at the-stack/public/resume.pdf
+CurrentEricChenResume.pdf

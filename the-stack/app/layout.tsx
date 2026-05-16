@@ -16,23 +16,27 @@ const bricolageGrotesque = Bricolage_Grotesque({
   display: 'swap',
 });
 
-const SITE_URL = 'https://ericchen8231.github.io/personal-website';
+// metadataBase is the *origin* only — Next prepends basePath ("/personal-website") on top.
+// If we include the basePath in metadataBase, og:image URLs end up doubled.
+const SITE_ORIGIN = 'https://ericchen8231.github.io';
+const SITE_URL = `${SITE_ORIGIN}/personal-website`;
 
 export const metadata: Metadata = {
-  title: 'Eric Chen — The Stack',
-  description: 'Full-stack engineer — literally. From 45nm CMOS cells to production APIs.',
+  title: 'Eric Chen — L1 → L7',
+  description: 'End-to-end engineer — literally. From 45nm CMOS cells to production APIs.',
   openGraph: {
-    title: 'Eric Chen — The Stack',
-    description: 'Full-stack engineer — literally. From 45nm CMOS cells to production APIs.',
+    title: 'Eric Chen — L1 → L7',
+    description: 'End-to-end engineer — literally. From 45nm CMOS cells to production APIs.',
     url: SITE_URL,
     siteName: 'Eric Chen',
+    type: 'website',
   },
   twitter: {
-    card: 'summary',
-    title: 'Eric Chen — The Stack',
-    description: 'Full-stack engineer — literally. From 45nm CMOS cells to production APIs.',
+    card: 'summary_large_image',
+    title: 'Eric Chen — L1 → L7',
+    description: 'End-to-end engineer — literally. From 45nm CMOS cells to production APIs.',
   },
-  metadataBase: new URL(SITE_URL),
+  metadataBase: new URL(SITE_ORIGIN),
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
