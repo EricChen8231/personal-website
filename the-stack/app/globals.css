@@ -213,3 +213,38 @@ html.dark .carry-table .cout-cell { color: #d29922; }
   .section { padding: 40px 16px; min-height: auto; }
   .section-inner { padding: 24px 20px; }
 }
+
+/* ── REDUCED MOTION ── */
+/* Vestibular-safe fallback. Canvases stay hidden, sections appear immediately,
+   blink/scale/zoom animations all collapse to instant transitions. JS pairs with
+   this by short-circuiting the RAF loops (see StackClient). */
+@media (prefers-reduced-motion: reduce) {
+  #bg-canvas, #signal-canvas { display: none !important; }
+  #hero-cursor-el, #term-cursor { animation: none !important; }
+  .section-inner { opacity: 1 !important; transform: none !important; transition: none !important; }
+  #hero { transform: none !important; opacity: 1 !important; filter: none !important; }
+  .scroll-hint { animation: none !important; opacity: 0.6; }
+  html { scroll-behavior: auto; }
+  body {
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+  }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ── TERMINAL INPUT (interactive prompt) ── */
+#term-form {
+  display: flex; align-items: baseline; gap: 4px;
+  margin-top: 4px; padding: 2px 0;
+  font-family: 'Courier New', monospace; font-size: 10.5px; line-height: 1.8;
+}
+#term-input {
+  background: transparent; border: 0; outline: 0; padding: 0;
+  color: var(--text); font: inherit; flex: 1; min-width: 0;
+  caret-color: var(--text);
+}
+#term-input::placeholder { color: var(--text4); }
+#term-body { cursor: text; }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { DRAWFNS, drawGrid, setL4Hov, setL2Inputs } from '@/lib/animations';
+import { DRAWFNS, drawGrid, setL4Hov, setL2Inputs, setHeroScroll, getHeroHotspots, setHeroHover } from '@/lib/animations';
 
 import { LAYERS, TLOGS } from '@/data/content';
 
@@ -40,7 +40,7 @@ export default function StackClient() {
           const tc = document.getElementById('term-cursor');
           if (tc) tc.style.display = 'none';
           setTimeout(() => {
-            termLine('<span class="t-dim">Loading stack layers...</span>');
+            termLine('<span class="t-dim">Loading layers...</span>');
             LAYERS.forEach((l, i) => setTimeout(() => {
               termLine(`[L${l.id}] ${l.name} loaded`, 't-ok');
               if (i === LAYERS.length - 1) setTimeout(() => termLine('Ready — scroll to trace ↓', 't-cmd'), 300);
@@ -59,11 +59,17 @@ export default function StackClient() {
     if (!canvas) return;
     const bgX = canvas.getContext('2d')!;
     const bgA = bgARef.current;
+    let dpr = window.devicePixelRatio || 1;
+    const reducedMql = window.matchMedia('(prefers-reduced-motion: reduce)');
     function rBg() {
       const c = bgRef.current;
       if (!c) return;
-      c.width = window.innerWidth;
-      c.height = window.innerHeight;
+      dpr = window.devicePixelRatio || 1;
+      const cssW = window.innerWidth, cssH = window.innerHeight;
+      c.width = Math.floor(cssW * dpr);
+      c.height = Math.floor(cssH * dpr);
+      c.style.width = cssW + 'px';
+      c.style.height = cssH + 'px';
     }
     rBg();
     window.addEventListener('resize', rBg);
@@ -72,21 +78,66 @@ export default function StackClient() {
     const R_OFF = 310;  // right-panel width
     let rafId: number;
     function renderBg() {
+      // Cheap early-out: tab hidden or user prefers reduced motion.
+      // We keep the RAF chain alive (browsers throttle hidden RAF to ~1Hz anyway)
+      // so visibility/preference changes pick up automatically.
+      if (document.hidden || reducedMql.matches) {
+        rafId = requestAnimationFrame(renderBg);
+        return;
+      }
       const c = bgRef.current;
       if (!c) return;
-      const W = c.width, H = c.height;
+      // CSS-pixel dimensions; ctx gets pre-scaled by DPR each frame.
+      const W = window.innerWidth, H = window.innerHeight;
+      bgX.setTransform(dpr, 0, 0, dpr, 0, 0);
       bgX.clearRect(0, 0, W, H);
-      drawGrid(bgX, W, H);
-      const aW = W - L_OFF - R_OFF; // drawable width between the two panels
+      bgX.imageSmoothingEnabled = true;
+      bgX.imageSmoothingQuality = 'high';
+
+      // Hero-specific scroll progress (0..1 across the first viewport-height of scroll).
+      // Used for the "dive into the screen" zoom and to grow the focal folder.
+      const heroProg = Math.min(1, Math.max(0, window.scrollY / window.innerHeight));
+      setHeroScroll(heroProg);
+      const heroEased = Math.sqrt(heroProg);
+      // Zoom origin = the center of the screen rect drawn by HERO_BG.
+      // Bezel margins in HERO_BG: bzlMx ≈ 6% W. Screen rect center ≈ canvas center.
+      const cx = W / 2, cy = H / 2;
+
+      // Layer animations use the drawable area (between the two side panels).
+      const aW = W - L_OFF - R_OFF;
       Object.keys(bgA).forEach(k => {
         const ki = parseInt(k);
         if (bgA[ki] > .005) {
-          bgX.save();
-          bgX.translate(L_OFF, 0);
-          DRAWFNS[ki]?.(bgX, aW, H, bgA[ki]);
-          bgX.restore();
+          if (ki === 0) {
+            // Hero / desktop scene — apply the dive-in zoom only here.
+            const zoom = 1 + heroEased * 1.4;  // 1.0 → 2.4 across the hero
+            bgX.save();
+            bgX.translate(cx, cy);
+            bgX.scale(zoom, zoom);
+            bgX.translate(-cx, -cy);
+            DRAWFNS[0]?.(bgX, W, H, bgA[0]);
+            bgX.restore();
+          } else {
+            // Layer animations draw at their natural size (no extra zoom).
+            drawGrid(bgX, W, H);
+            bgX.save();
+            bgX.translate(L_OFF, 0);
+            DRAWFNS[ki]?.(bgX, aW, H, bgA[ki]);
+            bgX.restore();
+          }
         }
       });
+
+      // Vignette overlay — only during the hero dive, fades out once L7 takes over.
+      if (bgA[0] > 0.02) {
+        const vig = (0.10 + heroEased * 0.30) * bgA[0];
+        const vgrad = bgX.createRadialGradient(cx, cy, Math.min(W, H) * 0.30, cx, cy, Math.max(W, H) * 0.75);
+        vgrad.addColorStop(0, 'rgba(0,0,0,0)');
+        vgrad.addColorStop(1, `rgba(0,0,0,${vig})`);
+        bgX.fillStyle = vgrad;
+        bgX.fillRect(0, 0, W, H);
+      }
+
       rafId = requestAnimationFrame(renderBg);
     }
     renderBg();
@@ -99,20 +150,31 @@ export default function StackClient() {
     if (!sigCanvas) return;
     const sigX = sigCanvas.getContext('2d')!;
     let sigT = 0;
+    let sigDpr = window.devicePixelRatio || 1;
+    const reducedMql = window.matchMedia('(prefers-reduced-motion: reduce)');
     function rSig() {
       const c = sigRef.current;
       if (!c) return;
-      c.width = 36;
-      c.height = window.innerHeight;
+      sigDpr = window.devicePixelRatio || 1;
+      const cssH = window.innerHeight;
+      c.width = Math.floor(36 * sigDpr);
+      c.height = Math.floor(cssH * sigDpr);
+      c.style.width = '36px';
+      c.style.height = cssH + 'px';
     }
     rSig();
     window.addEventListener('resize', rSig);
 
     let rafId: number;
     function renderSig() {
+      if (document.hidden || reducedMql.matches) {
+        rafId = requestAnimationFrame(renderSig);
+        return;
+      }
       const c = sigRef.current;
       if (!c) return;
-      const W = 36, H = c.height;
+      const W = 36, H = window.innerHeight;
+      sigX.setTransform(sigDpr, 0, 0, sigDpr, 0, 0);
       sigX.clearRect(0, 0, W, H);
       const pt = 50, pb = 50, th = H - pt - pb, tx = W / 2;
       sigT += .01;
@@ -161,8 +223,10 @@ export default function StackClient() {
       const heroEl = document.getElementById('hero');
       if (heroEl) {
         const heroFrac = Math.min(1, window.scrollY / (window.innerHeight * 0.6));
-        heroEl.style.transform = `scale(${1 - heroFrac * 0.06})`;
-        heroEl.style.opacity = String(1 - heroFrac * 0.45);
+        // Hero zooms IN (toward the viewer) and fades — feels like diving past the surface.
+        heroEl.style.transform = `scale(${1 + heroFrac * 0.18})`;
+        heroEl.style.opacity = String(1 - heroFrac * 0.85);
+        heroEl.style.filter = `blur(${heroFrac * 4}px)`;
       }
       let active: number | null = null;
       sections.forEach(s => {
@@ -170,9 +234,20 @@ export default function StackClient() {
         if (Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0) > window.innerHeight * .3)
           active = parseInt(s.dataset.layer!);
       });
+      // Hero / desktop scene is only visible while the user is at the hero itself.
+      // After scrolling past it, never bring it back — even on segments where no
+      // layer section is currently in view (e.g. between sections, or past L1).
+      const onHero = window.scrollY < window.innerHeight * 0.85;
       Object.keys(bgA).forEach(k => {
         const ki = parseInt(k);
-        const tgt = active === null ? (ki === 0 ? 1 : 0) : (ki === active ? 1 : 0);
+        let tgt: number;
+        if (active !== null) {
+          tgt = ki === active ? 1 : 0;
+        } else if (onHero) {
+          tgt = ki === 0 ? 1 : 0;
+        } else {
+          tgt = 0;  // past hero with no section in view → fade everything
+        }
         bgA[ki] += (tgt - bgA[ki]) * .07;
       });
       if (active && !logged.has(active)) {
@@ -208,17 +283,13 @@ export default function StackClient() {
 
   // ── L4 hover tracking ──
   useEffect(() => {
-    const bgC = bgRef.current;
     function onMouseMove(e: MouseEvent) {
-      const mx = e.clientX, my = e.clientY;
       const bgA = bgARef.current;
       if (bgA[4] < .05) { setL4Hov(-1); return; }
-      if (!bgC) return;
-      const W = bgC.width, H = bgC.height;
-      const scaleX = W / bgC.offsetWidth, scaleY = H / bgC.offsetHeight;
-      // subtract left panel offset so cx is in the same coordinate space as the draw functions
-      const cx = mx * scaleX - 36, cy2 = my * scaleY;
-      const aW = W - 36 - 310;
+      // All math in CSS pixels — drawing coords are CSS pixels after DPR setup.
+      const cx = e.clientX - 36, cy2 = e.clientY;
+      const H = window.innerHeight;
+      const aW = window.innerWidth - 36 - 310;
       const sx = aW * .42, ag = Math.max(12, Math.floor(aW * .018));
       const bW = Math.max(1, Math.floor((aW * .56 - 3 * ag) / 4)), bH = 72, bY = H * .42;
       const bX = [sx, sx + bW + ag, sx + 2 * (bW + ag), sx + 3 * (bW + ag)];
@@ -230,6 +301,45 @@ export default function StackClient() {
     }
     document.addEventListener('mousemove', onMouseMove);
     return () => document.removeEventListener('mousemove', onMouseMove);
+  }, []);
+
+  // ── Hero desktop-icon clicks ──
+  // Icons fade out as you scroll, so we only listen while in the hero band.
+  useEffect(() => {
+    function withinHero() { return window.scrollY < window.innerHeight * 0.6; }
+    function hitTest(e: MouseEvent) {
+      const hs = getHeroHotspots(window.innerWidth, window.innerHeight, window.scrollY);
+      return hs.find(h => e.clientX >= h.x && e.clientX <= h.x + h.w && e.clientY >= h.y && e.clientY <= h.y + h.h) || null;
+    }
+    function onMove(e: MouseEvent) {
+      if (!withinHero()) { setHeroHover(-1); document.body.style.cursor = ''; return; }
+      const hit = hitTest(e);
+      setHeroHover(hit ? hit.idx : -1);
+      document.body.style.cursor = hit ? 'pointer' : '';
+    }
+    function onClick(e: MouseEvent) {
+      if (!withinHero()) return;
+      const hit = hitTest(e);
+      if (!hit) return;
+      if (hit.url.startsWith('#')) {
+        const el = document.querySelector(hit.url);
+        if (el) {
+          e.preventDefault();
+          (el as HTMLElement).scrollIntoView({ behavior: 'smooth' });
+        }
+      } else {
+        e.preventDefault();
+        window.open(hit.url, '_blank', 'noopener,noreferrer');
+      }
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('click', onClick);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('click', onClick);
+      document.body.style.cursor = '';
+      setHeroHover(-1);
+    };
   }, []);
 
   // ── L2 interactive adder ──
@@ -247,15 +357,19 @@ export default function StackClient() {
       const binaryEl = document.getElementById('l2-binary');
       if (resultEl) resultEl.textContent = String(s);
       if (binaryEl) {
-        // Ripple-carry chain: index 0 = LSB
+        // CLA-style breakdown: P = A⊕B, G = A·B, then carries precomputed in parallel
+        // from P and G via the lookahead equations.
         const aBits = [0,1,2,3].map(i => (A >> i) & 1);
         const bBits = [0,1,2,3].map(i => (B >> i) & 1);
-        const carries = [0,0,0,0,0]; // carries[i] = carry into bit i
-        const sumBits = [0,0,0,0];
-        for (let i = 0; i < 4; i++) {
-          sumBits[i] = aBits[i] ^ bBits[i] ^ carries[i];
-          carries[i+1] = (aBits[i] & bBits[i]) | (aBits[i] & carries[i]) | (bBits[i] & carries[i]);
-        }
+        const P = [0,1,2,3].map(i => aBits[i] ^ bBits[i]);
+        const G = [0,1,2,3].map(i => aBits[i] & bBits[i]);
+        const C0 = 0;
+        const C1 = G[0] | (P[0] & C0);
+        const C2 = G[1] | (P[1] & G[0]) | (P[1] & P[0] & C0);
+        const C3 = G[2] | (P[2] & G[1]) | (P[2] & P[1] & G[0]) | (P[2] & P[1] & P[0] & C0);
+        const C4 = G[3] | (P[3] & G[2]) | (P[3] & P[2] & G[1]) | (P[3] & P[2] & P[1] & G[0]) | (P[3] & P[2] & P[1] & P[0] & C0);
+        const carries = [C0, C1, C2, C3, C4];
+        const sumBits = [0,1,2,3].map(i => P[i] ^ carries[i]);
         const cols = [3,2,1,0];
         const td  = (v: string|number, cls?: string) =>
           '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + v + '</td>';
@@ -265,16 +379,20 @@ export default function StackClient() {
           cols.map(i => td(aBits[i])).join('') + '</tr>';
         const bRow = '<tr>' + td('B:', 'row-label') +
           cols.map(i => td(bBits[i])).join('') + '</tr>';
+        const pRow = '<tr>' + td('P:', 'row-label') +
+          cols.map(i => td(P[i], 'c-bit' + (P[i] ? ' active' : ''))).join('') + '</tr>';
+        const gRow = '<tr>' + td('G:', 'row-label') +
+          cols.map(i => td(G[i], 'c-bit' + (G[i] ? ' active' : ''))).join('') + '</tr>';
         const cRow = '<tr>' + td('C<sub>i</sub>:', 'row-label') +
           cols.map(i => td(carries[i], 'c-bit' + (carries[i] ? ' active' : ''))).join('') + '</tr>';
         const sRow = '<tr class="sum-row">' + td('Sum:', 'row-label') +
           cols.map(i => td(sumBits[i])).join('') +
-          '<td class="cout-cell" style="font-size:9px;padding-left:4px">C=' + carries[4] + '</td></tr>';
+          '<td class="cout-cell" style="font-size:9px;padding-left:4px">Cout=' + C4 + '</td></tr>';
         binaryEl.innerHTML =
-          '<table class="carry-table">' + hdr + aRow + bRow + cRow + sRow + '</table>' +
+          '<table class="carry-table">' + hdr + aRow + bRow + pRow + gRow + cRow + sRow + '</table>' +
           '<div style="margin-top:5px;font-size:10px;color:var(--text4);' +
           'font-family:\'Courier New\',monospace">' +
-          pad(A, 4) + ' + ' + pad(B, 4) + ' = ' + carries[4] +
+          pad(A, 4) + ' + ' + pad(B, 4) + ' = ' + C4 +
           cols.map(i => sumBits[i]).join('') +
           '&nbsp;&nbsp;(' + (s > 15 ? 'Cout=1, overflow' : 'no overflow') + ')</div>';
       }
@@ -308,6 +426,147 @@ export default function StackClient() {
     return () => btn?.removeEventListener('click', toggleTheme);
   }, []);
 
+  // ── Interactive terminal ──
+  // Click anywhere in the terminal body focuses the input. Commands print to #term-log.
+  useEffect(() => {
+    const form = document.getElementById('term-form') as HTMLFormElement | null;
+    const input = document.getElementById('term-input') as HTMLInputElement | null;
+    const log = document.getElementById('term-log');
+    const body = document.getElementById('term-body');
+    if (!form || !input || !log || !body) return;
+
+    function print(html: string, cls = 't-info') {
+      const d = document.createElement('div'); d.className = cls; d.innerHTML = html;
+      log!.appendChild(d); body!.scrollTop = 99999;
+    }
+    function echo(cmd: string) {
+      print(`<span class="t-dim">~ % </span><span class="t-cmd">${escapeHtml(cmd)}</span>`);
+    }
+    function escapeHtml(s: string) {
+      return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+    }
+
+    const COMMANDS: Record<string, (args: string[]) => void> = {
+      help: () => {
+        print('available commands:', 't-info');
+        print('  <span class="t-cmd">help</span>           this list', 't-dim');
+        print('  <span class="t-cmd">whoami</span>         about me', 't-dim');
+        print('  <span class="t-cmd">ls</span>             list resources', 't-dim');
+        print('  <span class="t-cmd">cat about</span>      bio', 't-dim');
+        print('  <span class="t-cmd">cat skills</span>     tech stack', 't-dim');
+        print('  <span class="t-cmd">cat contact</span>    email / socials', 't-dim');
+        print('  <span class="t-cmd">open resume</span>    pull up resume.pdf', 't-dim');
+        print('  <span class="t-cmd">open github</span>    profile on github', 't-dim');
+        print('  <span class="t-cmd">goto L&lt;n&gt;</span>      jump to layer (1–7)', 't-dim');
+        print('  <span class="t-cmd">theme</span>          toggle dark/light', 't-dim');
+        print('  <span class="t-cmd">clear</span>          wipe terminal', 't-dim');
+      },
+      whoami: () => {
+        print('eric chen — usc viterbi · b.s. cecs · m.s. ee · los angeles');
+        print('open to: <span class="t-hi">systems eng</span>, <span class="t-hi">hardware design</span>, <span class="t-hi">ml infra</span>', 't-dim');
+      },
+      ls: () => {
+        print('<span class="t-cmd">about.txt</span>   <span class="t-cmd">skills.txt</span>   <span class="t-cmd">contact.txt</span>   <span class="t-cmd">resume.pdf</span>');
+        print('<span class="t-cmd">layers/</span>    <span class="t-cmd">projects/</span>    <span class="t-cmd">interests/</span>', 't-info');
+      },
+      pwd: () => print('/home/eric'),
+      cat: (args) => {
+        const f = (args[0] || '').replace(/\.txt$/, '');
+        if (f === 'about') {
+          print('end-to-end engineer — literally. comfortable from 45nm cmos cells', 't-info');
+          print('all the way up to production apis. happiest where physics meets', 't-info');
+          print('abstraction: branch predictors, mosfet biasing, gpu kernels, distributed', 't-info');
+          print('training. lately: training models on large codebases + cuda mccfr.', 't-info');
+        } else if (f === 'skills') {
+          print('languages: c · c++ · rust · python · typescript · systemverilog · risc-v asm', 't-info');
+          print('hardware : verilog · cadence virtuoso · spice · fpga (artix-7) · gem5', 't-info');
+          print('systems  : linux · tcp/ip · cuda · pytorch · postgres · raw packet i/o', 't-info');
+        } else if (f === 'contact') {
+          print('email   : echen823@usc.edu', 't-info');
+          print('linkedin: linkedin.com/in/ericchen823', 't-info');
+          print('github  : github.com/ericchen8231', 't-info');
+        } else if (f === 'resume') {
+          print('binary file — try <span class="t-cmd">open resume</span>', 't-warn');
+        } else if (!args[0]) {
+          print('cat: missing operand', 't-warn');
+        } else {
+          print(`cat: ${escapeHtml(args[0])}: no such file`, 't-warn');
+        }
+      },
+      open: (args) => {
+        const t = args[0] || '';
+        if (t === 'resume' || t === 'resume.pdf') {
+          window.open('/personal-website/resume.pdf', '_blank', 'noopener,noreferrer');
+          print('opening resume.pdf...', 't-ok');
+        } else if (t === 'github' || t === 'gh') {
+          window.open('https://github.com/ericchen8231', '_blank', 'noopener,noreferrer');
+          print('opening github...', 't-ok');
+        } else if (t === 'linkedin' || t === 'li') {
+          window.open('https://linkedin.com/in/ericchen823', '_blank', 'noopener,noreferrer');
+          print('opening linkedin...', 't-ok');
+        } else if (t === 'email' || t === 'mail') {
+          window.location.href = 'mailto:echen823@usc.edu';
+          print('opening mail client...', 't-ok');
+        } else if (!t) {
+          print('usage: open [resume|github|linkedin|email]', 't-warn');
+        } else {
+          print(`open: ${escapeHtml(t)}: unknown target`, 't-warn');
+        }
+      },
+      goto: (args) => {
+        const m = (args[0] || '').match(/^L?([1-7])$/i);
+        if (!m) { print('usage: goto L<n>  (1–7)', 't-warn'); return; }
+        const el = document.getElementById(`sec-l${m[1]}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+          print(`jumping to L${m[1]}...`, 't-ok');
+        }
+      },
+      theme: () => {
+        document.documentElement.classList.toggle('dark');
+        const isDark = document.documentElement.classList.contains('dark');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        const btn = document.getElementById('theme-btn');
+        if (btn) btn.textContent = isDark ? '○' : '◐';
+        print(`theme: ${isDark ? 'dark' : 'light'}`, 't-ok');
+      },
+      clear: () => { log!.innerHTML = ''; },
+      sudo: () => print('nice try.', 't-warn'),
+      exit: () => print("can't exit the stack. you ARE the stack.", 't-warn'),
+    };
+    // Aliases.
+    COMMANDS.man = COMMANDS.help;
+    COMMANDS['?'] = COMMANDS.help;
+
+    function run(line: string) {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      echo(trimmed);
+      const [cmd, ...args] = trimmed.split(/\s+/);
+      const fn = COMMANDS[cmd.toLowerCase()];
+      if (fn) fn(args);
+      else print(`zsh: command not found: ${escapeHtml(cmd)} — try <span class="t-cmd">help</span>`, 't-warn');
+    }
+
+    function onSubmit(e: Event) {
+      e.preventDefault();
+      const v = input!.value;
+      input!.value = '';
+      run(v);
+    }
+    function focusInput(e: Event) {
+      // Only auto-focus if user clicked terminal *body*, not a button inside.
+      if ((e.target as HTMLElement).closest('button')) return;
+      input!.focus();
+    }
+    form.addEventListener('submit', onSubmit);
+    body.addEventListener('click', focusInput);
+    return () => {
+      form.removeEventListener('submit', onSubmit);
+      body.removeEventListener('click', focusInput);
+    };
+  }, []);
+
   // ── Mobile panel toggle ──
   useEffect(() => {
     const btn = document.getElementById('panel-toggle');
@@ -333,12 +592,16 @@ export default function StackClient() {
             <div className="term-dot" style={{ background: '#ef4444' }} />
             <div className="term-dot" style={{ background: '#f59e0b' }} />
             <div className="term-dot" style={{ background: '#22c55e' }} />
-            <span style={{ marginLeft: 5 }}>eric@stack — zsh</span>
+            <span style={{ marginLeft: 5 }}>eric@silicon — zsh</span>
             <button id="theme-btn">&#9680;</button>
           </div>
           <div id="term-body">
             <div><span className="t-dim">~ % </span><span id="typed-init" /><span id="term-cursor" /></div>
             <div id="term-log" />
+            <form id="term-form" autoComplete="off">
+              <span className="t-dim">~ % </span>
+              <input id="term-input" type="text" placeholder="type 'help' ↵" spellCheck={false} autoComplete="off" />
+            </form>
           </div>
         </div>
       </div>
