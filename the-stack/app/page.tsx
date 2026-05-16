@@ -3,7 +3,7 @@ import StackClient from '@/components/StackClient';
 const MONO = "'Courier New', monospace";
 
 const STACK_ROWS = [
-  ['L7', 'Application', 'full-stack APIs · ML pipelines · CUDA inference'],
+  ['L7', 'Application', 'end-to-end APIs · ML pipelines · CUDA inference'],
   ['L6', 'Network',     'TCP/IP · routing protocols · raw packet I/O'],
   ['L5', 'Compiler',    'C · C++ · Rust · Python · TypeScript · RISC-V ASM'],
   ['L4', 'Arch',        'OoO pipelines · branch prediction · gem5 research'],
@@ -24,10 +24,10 @@ export default function Page() {
 
         {/* ── HERO ── */}
         <section id="hero">
-          <div className="hero-eyebrow">Portfolio · The Stack</div>
+          <div className="hero-eyebrow">Portfolio · L1 → L7</div>
           <div className="hero-name">Eric Chen</div>
           <div className="hero-tagline">
-            <strong>Full-stack engineer</strong> — literally.<br />
+            <strong>End-to-end engineer</strong> — literally.<br />
             From 45nm CMOS cells to production APIs.
           </div>
           <div className="hero-meta">USC Viterbi · B.S. CECS · M.S. EE</div>
@@ -77,7 +77,7 @@ export default function Page() {
               <div className="project-item">
                 <div className="project-name">This site</div>
                 <div className="project-tech">Next.js · TypeScript · Canvas · Zero dependencies</div>
-                <div className="project-desc">Iterating on a portfolio that visualizes the hardware-software stack — every layer has a live animation that shows what&apos;s actually happening at that abstraction level.</div>
+                <div className="project-desc">Iterating on a portfolio that visualizes every layer from transistor to API — each section has a live animation that shows what&apos;s actually happening at that abstraction level.</div>
               </div>
             </div>
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -96,7 +96,7 @@ export default function Page() {
             <div className="layer-tag">L7 — <span>Application Layer</span></div>
             <div className="section-title">Software Engineering</div>
             <div className="section-sub">where humans meet systems</div>
-            <div className="section-desc">Production APIs, full-stack apps, and ML pipelines — the surface where commands enter the machine.</div>
+            <div className="section-desc">Production APIs, end-to-end apps, and ML pipelines — the surface where commands enter the machine.</div>
             <div className="project-list">
               <div className="project-item">
                 <div className="project-name">MUJI USA — Backend Intern 2025</div>
@@ -160,7 +160,7 @@ export default function Page() {
               <div className="project-item">
                 <div className="project-name">Scripting &amp; Web</div>
                 <div className="project-tech">Python · JavaScript · TypeScript · Bash</div>
-                <div className="project-desc">Python for tooling, ML pipelines, and simulation scripting. TypeScript/Next.js for full-stack. Bash for everything that should have been automated already.</div>
+                <div className="project-desc">Python for tooling, ML pipelines, and simulation scripting. TypeScript/Next.js for end-to-end apps. Bash for everything that should have been automated already.</div>
               </div>
               <div className="project-item">
                 <div className="project-name">Intel Pin Instrumentation</div>
@@ -220,8 +220,8 @@ export default function Page() {
           <div className="section-inner">
             <div className="layer-tag">L2 — <span>Circuit Design</span></div>
             <div className="section-title">Analog &amp; Mixed-Signal</div>
-            <div className="section-sub">where electrons become logic</div>
-            <div className="section-desc">CMOS standard cells, op-amp topologies, and the analog world underlying every digital abstraction.</div>
+            <div className="section-sub">where parallelism beats the ripple</div>
+            <div className="section-desc">Carry-lookahead adder. All four carries precomputed in parallel from per-bit propagate (P) and generate (G) signals — addition resolves in ~4 gate delays regardless of bit width, instead of waiting for the carry to ripple through one bit at a time.</div>
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', marginBottom: 14, background: 'var(--bg2)' }}>
               <div style={{ fontSize: 10, color: 'var(--text4)', fontFamily: MONO, letterSpacing: 1, marginBottom: 9 }}>TRY THE ADDER →</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -277,7 +277,7 @@ export default function Page() {
         <section className="section" id="sec-interests">
           <div className="section-inner">
             <div className="layer-tag" style={{ color: 'var(--text3)' }}>Personal — <span>Interests</span></div>
-            <div className="section-title">Outside the stack</div>
+            <div className="section-title">Outside the lab</div>
             <div className="section-sub">the non-technical side</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
               <div className="project-item">
@@ -300,10 +300,10 @@ export default function Page() {
         <section style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 40px', position: 'relative', zIndex: 5 }}>
           <div style={{ textAlign: 'center', maxWidth: 560, width: '100%' }}>
 
-            {/* Stack summary */}
+            {/* Layer summary */}
             <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 18px', marginBottom: 40, textAlign: 'left' }}>
               <div style={{ fontSize: 9, color: 'var(--text4)', fontFamily: MONO, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 10 }}>
-                7-layer stack trace
+                7-layer execution trace
               </div>
               {STACK_ROWS.map(([id, name, desc]) => (
                 <div key={id} style={{ display: 'flex', gap: 10, padding: '4px 0', borderBottom: '1px solid var(--border2)', fontFamily: MONO }}>
@@ -315,13 +315,13 @@ export default function Page() {
             </div>
 
             <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--text4)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 18 }}>
-              End of stack trace
+              End of trace
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 800, color: 'var(--text)', letterSpacing: -1, marginBottom: 10 }}>
               Let&apos;s build something.
             </div>
             <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 30, lineHeight: 1.7 }}>
-              From bare silicon to production — I work across the full stack, literally.
+              From bare silicon to production — I work end to end, literally.
             </div>
             <div style={{ display: 'flex', gap: 9, justifyContent: 'center', flexWrap: 'wrap' }}>
               <a href="mailto:echen823@usc.edu"

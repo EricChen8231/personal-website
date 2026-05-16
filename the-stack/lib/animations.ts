@@ -41,24 +41,32 @@ const L7 = (() => {
   let phase: 'fwd' | 'bwd' | 'pause' = 'fwd';
   let phaseT = 0, fwdLayer = 0, bwdLayer = 0;
   let lossVal = 2.4;
+  let accVal = 0.32;
+  const accHist: (number | null)[] = Array(80).fill(null);
+  let accPtr = 0;
   type Pulse = { x0: number; y0: number; x1: number; y1: number; val: number; age: number; maxAge: number; isBwd: boolean };
   const pulses: Pulse[] = [];
+  // Weight-delta markers shown during pause phase.
+  type WDelta = { x: number; y: number; sign: 1 | -1; mag: number; age: number };
+  let wDeltas: WDelta[] = [];
 
   return function draw(ctx: Ctx, W: number, H: number, a: number) {
     t++; phaseT++;
     if (phase === 'fwd') {
       if (phaseT % 18 === 0) {
         fwdLayer++;
-        if (fwdLayer >= 1 && fwdLayer <= layers.length) {
+        if (fwdLayer >= 1 && fwdLayer < layers.length) {
           const netX = W * .44, netW = W * .42, netH = H * .72, netY = H * .14;
           const srcLayer = fwdLayer - 1, tgtLayer = fwdLayer;
           const x0 = netX + srcLayer * (netW / (layers.length - 1));
           const x1 = netX + tgtLayer * (netW / (layers.length - 1));
+          // Spawn a pulse for every (i, j) edge so the propagation looks fully connected.
           for (let i = 0; i < layers[srcLayer]; i++) {
             const y0 = netY + (i + .5) * (netH / layers[srcLayer]);
-            const j = Math.floor(seededRnd(t * 77 + srcLayer * 13 + i * 29) * layers[tgtLayer]);
-            const y1 = netY + (j + .5) * (netH / layers[tgtLayer]);
-            pulses.push({ x0, y0, x1, y1, val: acts[srcLayer][i], age: 0, maxAge: 20, isBwd: false });
+            for (let j = 0; j < layers[tgtLayer]; j++) {
+              const y1 = netY + (j + .5) * (netH / layers[tgtLayer]);
+              pulses.push({ x0, y0, x1, y1, val: acts[srcLayer][i], age: 0, maxAge: 20, isBwd: false });
+            }
           }
         }
         if (fwdLayer >= layers.length) { phase = 'bwd'; phaseT = 0; bwdLayer = layers.length - 1; }
@@ -76,16 +84,43 @@ const L7 = (() => {
           const srcLayer = bwdLayer + 1, tgtLayer = bwdLayer;
           const x0 = netX + srcLayer * (netW / (layers.length - 1));
           const x1 = netX + tgtLayer * (netW / (layers.length - 1));
+          // Spawn a gradient pulse for every (j, i) edge — backprop touches every weight.
           for (let j = 0; j < layers[srcLayer]; j++) {
             const y0 = netY + (j + .5) * (netH / layers[srcLayer]);
-            const i = Math.floor(seededRnd(t * 99 + srcLayer * 17 + j * 31) * layers[tgtLayer]);
-            const y1 = netY + (i + .5) * (netH / layers[tgtLayer]);
-            pulses.push({ x0, y0: y0, x1, y1, val: grads[srcLayer][j], age: 0, maxAge: 18, isBwd: true });
+            for (let i = 0; i < layers[tgtLayer]; i++) {
+              const y1 = netY + (i + .5) * (netH / layers[tgtLayer]);
+              pulses.push({ x0, y0, x1, y1, val: grads[srcLayer][j], age: 0, maxAge: 18, isBwd: true });
+            }
           }
         }
         if (bwdLayer < 0) {
           lossVal = Math.max(.04, lossVal * 0.96 + (seededRnd(epoch * 31) - .5) * 0.08 * lossVal);
+          accVal = Math.min(.99, accVal + (1 - accVal) * (.05 + seededRnd(epoch * 41) * .03));
           lossHist[lossPtr] = lossVal; lossPtr = (lossPtr + 1) % lossHist.length;
+          accHist[accPtr] = accVal; accPtr = (accPtr + 1) % accHist.length;
+          // Update *every* weight in the network — that's what an SGD step actually does.
+          // Then sample 14 edges to spawn floating ±Δw markers (full set would be visual noise).
+          const netX = W * .44, netW = W * .42, netH = H * .72, netY = H * .14;
+          for (let l = 0; l < layers.length - 1; l++) {
+            for (let i = 0; i < layers[l]; i++) {
+              for (let j = 0; j < layers[l + 1]; j++) {
+                const w = weights[l][i][j];
+                const upd = (seededRnd(epoch * 131 + l * 911 + i * 53 + j * 7) - .5) * .12;
+                weights[l][i][j] = Math.max(-1.2, Math.min(1.2, w + upd));
+              }
+            }
+          }
+          for (let s = 0; s < 14; s++) {
+            const l = Math.floor(seededRnd(epoch * 17 + s * 3) * (layers.length - 1));
+            const i = Math.floor(seededRnd(epoch * 19 + s * 5) * layers[l]);
+            const j = Math.floor(seededRnd(epoch * 23 + s * 7) * layers[l + 1]);
+            const x0 = netX + l * (netW / (layers.length - 1));
+            const x1 = netX + (l + 1) * (netW / (layers.length - 1));
+            const y0 = netY + (i + .5) * (netH / layers[l]);
+            const y1 = netY + (j + .5) * (netH / layers[l + 1]);
+            const upd = (seededRnd(epoch * 131 + l * 911 + i * 53 + j * 7) - .5) * .12;
+            wDeltas.push({ x: (x0 + x1) / 2, y: (y0 + y1) / 2, sign: upd >= 0 ? 1 : -1, mag: Math.abs(upd), age: 0 });
+          }
           epoch++; step++; phase = 'pause'; phaseT = 0; fwdLayer = 0;
           grads = layers.map(n => Array(n).fill(0));
         }
@@ -99,7 +134,10 @@ const L7 = (() => {
       if (phaseT > 28) { phase = 'fwd'; phaseT = 0; fwdLayer = 0; acts = layers.map(n => Array(n).fill(0)); }
     }
     const netX = W * .44, netW = W * .42, netH = H * .72, netY = H * .14;
-    const lossX = W * .44, lossY = netY + netH + 10, lossW = netW, lossH = 48;
+    // Clamp the chart strip so it never falls below the viewport on short windows.
+    const lossH = 48;
+    const lossX = W * .44, lossW = netW;
+    const lossY = Math.min(netY + netH + 10, H - lossH - 6);
     for (let l = 0; l < layers.length - 1; l++) {
       const x0 = netX + l * (netW / (layers.length - 1));
       const x1 = netX + (l + 1) * (netW / (layers.length - 1));
@@ -156,9 +194,12 @@ const L7 = (() => {
       const progress = p.age / p.maxAge, fade = Math.max(0, 1 - progress);
       if (progress >= 1) { pulses.splice(i, 1); continue; }
       const px = p.x0 + progress * (p.x1 - p.x0), py = p.y0 + progress * (p.y1 - p.y0);
-      const col = p.isBwd ? `rgba(190,18,60,${fade * .6 * a})` : `rgba(29,78,216,${fade * .6 * a})`;
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = `rgba(244,244,245,${fade * .8 * a})`; ctx.font = '7px Courier New'; ctx.textAlign = 'center';
+      const col = p.isBwd ? `rgba(190,18,60,${fade * .75 * a})` : `rgba(29,78,216,${fade * .75 * a})`;
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py, 5.5, 0, Math.PI * 2); ctx.fill();
+      // Bright halo + dark glyph: legible on light AND dark backgrounds.
+      ctx.fillStyle = `rgba(255,255,255,${fade * .9 * a})`;
+      ctx.beginPath(); ctx.arc(px, py, 3.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(24,24,27,${fade * .9 * a})`; ctx.font = 'bold 7px Courier New'; ctx.textAlign = 'center';
       ctx.fillText(p.val.toFixed(2), px, py + 2);
     }
     const phLbl = phase === 'fwd' ? '→ forward pass' : phase === 'bwd' ? '← backprop' : 'updating weights';
@@ -167,15 +208,18 @@ const L7 = (() => {
     ctx.fillText(phLbl, netX, netY - 22);
     ctx.fillStyle = ink(.22 * a); ctx.textAlign = 'right';
     ctx.fillText(`epoch ${epoch}  step ${step}`, netX + netW, netY - 22);
+    // Two side-by-side mini-charts: loss (left) and accuracy (right).
+    const halfW = (lossW - 6) / 2;
+    // ── Loss panel ──
     ctx.fillStyle = `rgba(244,244,245,${.45 * a})`; ctx.strokeStyle = ink(.1 * a); ctx.lineWidth = 1;
-    ctx.fillRect(lossX, lossY, lossW, lossH); ctx.strokeRect(lossX, lossY, lossW, lossH);
+    ctx.fillRect(lossX, lossY, halfW, lossH); ctx.strokeRect(lossX, lossY, halfW, lossH);
     ctx.fillStyle = ink(.2 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
     ctx.fillText('training loss', lossX + 4, lossY + 10);
     const pts: [number, number][] = [];
     for (let i = 0; i < lossHist.length; i++) {
       const idx = (lossPtr + i) % lossHist.length;
       if (lossHist[idx] === null) continue;
-      const px2 = lossX + 4 + (i / lossHist.length) * (lossW - 8);
+      const px2 = lossX + 4 + (i / lossHist.length) * (halfW - 8);
       const py2 = lossY + lossH - 6 - ((lossHist[idx] as number) / 2.6) * (lossH - 16);
       pts.push([px2, py2]);
     }
@@ -185,7 +229,46 @@ const L7 = (() => {
       pts.slice(1).forEach(([px2, py2]) => ctx.lineTo(px2, py2)); ctx.stroke();
     }
     ctx.fillStyle = `rgba(21,128,61,${.6 * a})`; ctx.font = '9px Courier New'; ctx.textAlign = 'right';
-    ctx.fillText('loss=' + lossVal.toFixed(3), lossX + lossW - 4, lossY + 10);
+    ctx.fillText('loss=' + lossVal.toFixed(3), lossX + halfW - 4, lossY + 10);
+    // ── Accuracy panel ──
+    const accX = lossX + halfW + 6;
+    ctx.fillStyle = `rgba(244,244,245,${.45 * a})`; ctx.strokeStyle = ink(.1 * a); ctx.lineWidth = 1;
+    ctx.fillRect(accX, lossY, halfW, lossH); ctx.strokeRect(accX, lossY, halfW, lossH);
+    ctx.fillStyle = ink(.2 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
+    ctx.fillText('val accuracy', accX + 4, lossY + 10);
+    const accPts: [number, number][] = [];
+    for (let i = 0; i < accHist.length; i++) {
+      const idx = (accPtr + i) % accHist.length;
+      if (accHist[idx] === null) continue;
+      const px2 = accX + 4 + (i / accHist.length) * (halfW - 8);
+      const py2 = lossY + lossH - 6 - (accHist[idx] as number) * (lossH - 16);
+      accPts.push([px2, py2]);
+    }
+    if (accPts.length > 1) {
+      // Fill area under curve.
+      ctx.fillStyle = `rgba(29,78,216,${.08 * a})`;
+      ctx.beginPath(); ctx.moveTo(accPts[0][0], lossY + lossH - 6);
+      accPts.forEach(([px2, py2]) => ctx.lineTo(px2, py2));
+      ctx.lineTo(accPts[accPts.length - 1][0], lossY + lossH - 6);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = `rgba(29,78,216,${.7 * a})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(accPts[0][0], accPts[0][1]);
+      accPts.slice(1).forEach(([px2, py2]) => ctx.lineTo(px2, py2)); ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(29,78,216,${.65 * a})`; ctx.font = '9px Courier New'; ctx.textAlign = 'right';
+    ctx.fillText('acc=' + (accVal * 100).toFixed(1) + '%', accX + halfW - 4, lossY + 10);
+
+    // ── Weight-update markers, only visible during pause phase ──
+    if (wDeltas.length) {
+      wDeltas = wDeltas.filter(d => d.age < 30);
+      wDeltas.forEach(d => {
+        d.age++;
+        const fade = Math.max(0, 1 - d.age / 30);
+        const col = d.sign > 0 ? `rgba(21,128,61,${fade * .85 * a})` : `rgba(190,18,60,${fade * .85 * a})`;
+        ctx.fillStyle = col; ctx.font = `bold ${8 + d.mag * 6}px Courier New`; ctx.textAlign = 'center';
+        ctx.fillText(d.sign > 0 ? '+Δw' : '−Δw', d.x, d.y - d.age * .4);
+      });
+    }
   };
 })();
 
@@ -200,12 +283,85 @@ const L6 = (() => {
     _cx?: number; _cy?: number;
   };
   const rs: Router[] = [
-    { x: .1, y: .5, n: 'SRC' }, { x: .28, y: .28, n: 'R1' }, { x: .28, y: .72, n: 'R2' },
-    { x: .5, y: .5, n: 'R3' }, { x: .7, y: .28, n: 'R4' }, { x: .7, y: .72, n: 'R5' }, { x: .88, y: .5, n: 'DST' },
+    // ── LAN-A (sources) ──
+    { x: .04, y: .25, n: 'SRC-A' },     // 0
+    { x: .04, y: .75, n: 'SRC-B' },     // 1
+    // ── Edge routers (ingress) ──
+    { x: .15, y: .25, n: 'E1' },        // 2
+    { x: .15, y: .75, n: 'E2' },        // 3
+    // ── Distribution layer (left core) ──
+    { x: .30, y: .12, n: 'D1' },        // 4
+    { x: .30, y: .50, n: 'D2' },        // 5
+    { x: .30, y: .88, n: 'D3' },        // 6
+    // ── Backbone (BGP / AS65001) ──
+    { x: .47, y: .25, n: 'BB1' },       // 7
+    { x: .47, y: .75, n: 'BB2' },       // 8
+    // ── Distribution layer (right core) ──
+    { x: .62, y: .12, n: 'D4' },        // 9
+    { x: .62, y: .50, n: 'D5' },        // 10
+    { x: .62, y: .88, n: 'D6' },        // 11
+    // ── Edge routers (egress) ──
+    { x: .78, y: .25, n: 'E3' },        // 12
+    { x: .78, y: .75, n: 'E4' },        // 13
+    // ── LAN-B (destinations) ──
+    { x: .89, y: .25, n: 'DST-A' },     // 14
+    { x: .89, y: .75, n: 'DST-B' },     // 15
   ];
-  const pktPaths = [[0,1,3,4,6],[0,2,3,5,6],[0,1,2,3,5,6],[0,2,3,4,6],[1,3,5,6],[2,3,4,6],[0,1,3,5,6],[1,2,3,4,6]];
-  const revPath = [6, 4, 3, 1, 0];
-  const allE: [number, number][] = [[0,1],[0,2],[1,3],[2,3],[3,4],[3,5],[4,6],[5,6],[1,2]];
+  // Three logical regions — sources, backbone, destinations.
+  const subnets: { ids: number[]; label: string; col: string }[] = [
+    { ids: [0, 1, 2, 3],                label: 'LAN-A · 10.0.0.0/24',     col: 'rgba(29,78,216,'  },
+    { ids: [4, 5, 6, 7, 8, 9, 10, 11],  label: 'Backbone · AS65001',      col: 'rgba(126,34,206,' },
+    { ids: [12, 13, 14, 15],            label: 'LAN-B · 192.168.2.0/24',  col: 'rgba(180,83,9,'   },
+  ];
+  // 15+ distinct paths from various sources to various destinations, varying hop counts (5–7).
+  const pktPaths = [
+    // SRC-A → DST-A
+    [0, 2, 4, 7, 9, 12, 14],
+    [0, 2, 5, 7, 10, 12, 14],
+    [0, 2, 5, 10, 12, 14],
+    [0, 2, 4, 5, 7, 9, 12, 14],
+    // SRC-A → DST-B
+    [0, 2, 5, 8, 11, 13, 15],
+    [0, 2, 5, 10, 8, 13, 15],
+    [0, 2, 4, 7, 8, 13, 15],
+    // SRC-B → DST-A
+    [1, 3, 5, 7, 9, 12, 14],
+    [1, 3, 5, 10, 12, 14],
+    [1, 3, 6, 8, 7, 9, 12, 14],
+    // SRC-B → DST-B
+    [1, 3, 6, 8, 11, 13, 15],
+    [1, 3, 5, 8, 11, 13, 15],
+    [1, 3, 6, 11, 13, 15],
+    [1, 3, 5, 10, 13, 15],
+    // Cross traffic
+    [0, 2, 4, 7, 8, 11, 13, 15],
+    [1, 3, 6, 8, 10, 12, 14],
+  ];
+  // SYN-ACK reverse path: a representative DST→SRC route.
+  const revPath = [14, 12, 9, 7, 5, 2, 0];
+  // All bidirectional edges in the mesh.
+  const allE: [number, number][] = [
+    // LAN-A → edges
+    [0, 2], [1, 3],
+    // Edges → distribution (left)
+    [2, 4], [2, 5], [3, 5], [3, 6],
+    // Left distribution mesh
+    [4, 5], [5, 6],
+    // Distribution → backbone
+    [4, 7], [5, 7], [5, 8], [6, 8],
+    // Backbone mesh
+    [7, 8],
+    // Cross-backbone horizontal links — distribution layers connect across BB.
+    [5, 10], [4, 9], [6, 11],
+    // Backbone → right distribution
+    [7, 9], [7, 10], [8, 10], [8, 11],
+    // Right distribution mesh
+    [9, 10], [10, 11],
+    // Right distribution → edges + backbone shortcut to edge
+    [9, 12], [10, 12], [10, 13], [11, 13], [8, 13],
+    // Edges → LAN-B
+    [12, 14], [13, 15],
+  ];
   let pkts: Packet[] = [], t = 0, pktId = 0;
   let tcpState = 1, tcpTimer = 0;
   type SynAck = { hop: number; prog: number; spd: number; trail: { x: number; y: number }[] } | null;
@@ -219,65 +375,85 @@ const L6 = (() => {
   let pidx = 0;
   const protoColor: Record<string, string> = { 'TCP': 'rgba(29,78,216,', 'UDP': 'rgba(180,83,9,', 'ICMP': 'rgba(100,100,110,' };
 
+  // Per-router pulse decay timers (one per router).
+  const routerPulse: number[] = new Array(16).fill(0);
+  // Drop animations: red X with optional ICMP-time-exceeded reply.
+  type Drop = { x: number; y: number; age: number; proto: string };
+  let drops: Drop[] = [];
+  // Running stats — recomputed every 60 frames (~1s).
+  const stats = { pps: 0, bps: 0, dps: 0, activeFlows: 0 };
+  let statBucketPkts = 0, statBucketBytes = 0, statBucketDrops = 0, statSampleT = 0;
+
   function mkPkt(): Packet {
     const i = pidx % protos.length; pidx++;
     const pth = pktPaths[Math.floor(Math.random() * pktPaths.length)];
+    // 1 in 6 packets starts with a low TTL so it'll expire mid-route (creates drama).
+    const lowTtl = Math.random() < 0.16;
+    statBucketPkts++;
+    statBucketBytes += sizes[i];
     return {
-      hop: 0, prog: 0, ttl: 64 - Math.floor(Math.random() * 4), spd: .009 + Math.random() * .006, id: pktId++,
+      hop: 0, prog: 0,
+      ttl: lowTtl ? 2 + Math.floor(Math.random() * 2) : 64 - Math.floor(Math.random() * 4),
+      spd: .009 + Math.random() * .006, id: pktId++,
       proto: protos[i], flags: flags[i], src: srcs[i], dst: dsts[i],
       sport: ports[i][0], dport: ports[i][1], size: sizes[i], seq: Math.floor(Math.random() * 0xFFFF),
       trail: [], path: pth,
     };
   }
 
-  function drawTCP(ctx: Ctx, W: number, H: number, a: number) {
-    const sdX = 20, sdY = H * .1, sdW = W * 0.32, sdH = H * 0.8;
-    const srcX = sdX + 20, dstX = sdX + sdW - 20, y1 = sdY + 40, y2 = sdY + sdH - 40;
-    ctx.fillStyle = `rgba(244,244,245,${0.05 * a})`; ctx.strokeStyle = ink(.06 * a); ctx.lineWidth = 1;
-    ctx.fillRect(sdX, sdY, sdW, sdH); ctx.strokeRect(sdX, sdY, sdW, sdH);
-    ctx.fillStyle = ink(.25 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'left';
-    ctx.fillText('TCP Handshake', sdX + 8, sdY + 16);
-    ctx.strokeStyle = ink(.15 * a); ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
-    ctx.beginPath(); ctx.moveTo(srcX, y1); ctx.lineTo(srcX, y2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(dstX, y1); ctx.lineTo(dstX, y2); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = ink(.5 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'center';
-    ctx.fillText('SRC', srcX, y1 - 10); ctx.fillText('DST', dstX, y1 - 10);
-    const arrows = [
-      { label: 'SYN', from: 'SRC', to: 'DST', col: 'rgba(180,83,9,' },
-      { label: 'SYN-ACK', from: 'DST', to: 'SRC', col: 'rgba(21,128,61,' },
-      { label: 'ACK', from: 'SRC', to: 'DST', col: 'rgba(29,78,216,' },
-      { label: 'DATA', from: 'SRC', to: 'DST', col: 'rgba(24,24,27,' },
-    ];
-    let yPos = y1 + 30;
-    arrows.forEach((arr, idx) => {
-      if (idx + 1 <= tcpState) {
-        const fromX = arr.from === 'SRC' ? srcX : dstX, toX = arr.from === 'SRC' ? dstX : srcX;
-        const progress = tcpState > idx + 1 ? 1 : tcpState === idx + 1 ? Math.min(tcpTimer / 80, 1) : 0;
-        if (progress > 0) {
-          const x1c = fromX, y = yPos, x2c = fromX + (toX - fromX) * progress;
-          ctx.strokeStyle = `${arr.col}${0.7 * a})`; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.moveTo(x1c, y); ctx.lineTo(x2c, y); ctx.stroke();
-          if (progress > 0.3) {
-            const arrowSize = 6, dx = toX - fromX, angle = dx > 0 ? 0 : Math.PI;
-            ctx.fillStyle = `${arr.col}${0.7 * a})`;
-            ctx.beginPath(); ctx.moveTo(x2c, y);
-            ctx.lineTo(x2c - arrowSize * Math.cos(angle - Math.PI / 6), y - arrowSize * Math.sin(angle - Math.PI / 6));
-            ctx.lineTo(x2c - arrowSize * Math.cos(angle + Math.PI / 6), y - arrowSize * Math.sin(angle + Math.PI / 6));
-            ctx.closePath(); ctx.fill();
-          }
-          ctx.fillStyle = `${arr.col}${0.6 * a})`; ctx.font = '8px Courier New'; ctx.textAlign = 'center';
-          ctx.fillText(arr.label, fromX + (toX - fromX) / 2, y - 6);
-        }
-        yPos += 25;
-      }
-    });
+  // Draw a packet "icon" matching its protocol (TCP=●, UDP=■, ICMP=▲).
+  function drawPacket(ctx: Ctx, x: number, y: number, r: number, proto: string, col: string) {
+    ctx.fillStyle = col;
+    if (proto === 'UDP') {
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    } else if (proto === 'ICMP') {
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y + r);
+      ctx.lineTo(x - r, y + r);
+      ctx.closePath(); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   return function draw(ctx: Ctx, W: number, H: number, a: number) {
     t++; tcpTimer++;
+    // Right-area wrap (avoids the section text card on the left).
+    ctx.save();
+    const _rightX = W * 0.42, _fitS = (W - _rightX) / W;
+    ctx.translate(Math.round(_rightX), Math.round((H - H * _fitS) / 2));
+    ctx.scale(_fitS, _fitS);
+
     if (tcpTimer > 90) { tcpState = tcpState < 4 ? tcpState + 1 : 1; tcpTimer = 0; }
-    if (t % 140 === 0 || t === 1) pkts.push(mkPkt());
+    if (t % 120 === 0 || t === 1) pkts.push(mkPkt());
+    // Tick down router pulses and drop animations every frame.
+    for (let i = 0; i < routerPulse.length; i++) if (routerPulse[i] > 0) routerPulse[i]--;
+    drops = drops.filter(d => ++d.age < 50);
+
+    // ── Subnet color regions drawn behind everything ──
+    subnets.forEach(sub => {
+      // Compute bounding box of routers in this subnet.
+      let minX = 1, minY = 1, maxX = 0, maxY = 0;
+      sub.ids.forEach(id => {
+        if (rs[id].x < minX) minX = rs[id].x;
+        if (rs[id].y < minY) minY = rs[id].y;
+        if (rs[id].x > maxX) maxX = rs[id].x;
+        if (rs[id].y > maxY) maxY = rs[id].y;
+      });
+      const padX = .055, padY = .085;
+      const rx = (minX - padX) * W, ry = (minY - padY) * H;
+      const rw = (maxX - minX + 2 * padX) * W, rh = (maxY - minY + 2 * padY) * H;
+      ctx.fillStyle = sub.col + (0.08 * a) + ')';
+      ctx.strokeStyle = sub.col + (0.35 * a) + ')';
+      ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+      ctx.fillRect(rx, ry, rw, rh); ctx.strokeRect(rx, ry, rw, rh);
+      ctx.setLineDash([]);
+      ctx.fillStyle = sub.col + (0.7 * a) + ')';
+      ctx.font = 'bold 8px Courier New'; ctx.textAlign = 'left';
+      ctx.fillText(sub.label, rx + 4, ry + 11);
+    });
+
     const activeEdges = new Set<string>(), activeNodes = new Set<number>();
     pkts.forEach(p => {
       if (p.hop < p.path.length - 1) {
@@ -287,35 +463,82 @@ const L6 = (() => {
     });
     allE.forEach(([i, j]) => {
       const on = activeEdges.has(Math.min(i, j) + ',' + Math.max(i, j));
-      ctx.strokeStyle = on ? ink(.22 * a) : ink(.06 * a); ctx.lineWidth = on ? 1.8 : 1;
+      ctx.strokeStyle = on ? ink(.35 * a) : ink(.12 * a); ctx.lineWidth = on ? 2 : 1;
       ctx.beginPath(); ctx.moveTo(rs[i].x * W, rs[i].y * H); ctx.lineTo(rs[j].x * W, rs[j].y * H); ctx.stroke();
     });
     rs.forEach((r, i) => {
       const rx = r.x * W, ry = r.y * H, on = activeNodes.has(i);
-      ctx.fillStyle = on ? ink(.08 * a) : `rgba(244,244,245,${.6 * a})`;
-      ctx.strokeStyle = on ? ink(.3 * a) : ink(.1 * a); ctx.lineWidth = on ? 1.5 : 1;
+      // Pulse halo on packet arrival.
+      const pulse = routerPulse[i] / 18;
+      if (pulse > 0.05) {
+        ctx.fillStyle = `rgba(29,78,216,${pulse * .35 * a})`;
+        ctx.beginPath(); ctx.arc(rx, ry, 15 + pulse * 18, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = on ? `rgba(248,250,255,${.96 * a})` : `rgba(248,250,253,${.8 * a})`;
+      ctx.strokeStyle = on ? ink(.5 * a) : ink(.25 * a); ctx.lineWidth = on ? 1.6 : 1;
       ctx.beginPath(); ctx.arc(rx, ry, 15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = on ? ink(.6 * a) : ink(.25 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'center';
+      ctx.fillStyle = on ? ink(.85 * a) : ink(.5 * a); ctx.font = 'bold 10px Courier New'; ctx.textAlign = 'center';
       ctx.fillText(r.n, rx, ry + 4);
     });
     pkts = pkts.filter(p => p.hop < p.path.length - 1);
     pkts.forEach(p => {
       p.prog += p.spd;
-      if (p.prog >= 1) { p.hop++; p.prog = 0; p.ttl--; if (p.hop >= p.path.length - 1) return; }
+      if (p.prog >= 1) {
+        p.hop++; p.prog = 0; p.ttl--;
+        // Pulse the router we just arrived at.
+        const arrivedAt = p.path[p.hop];
+        if (arrivedAt !== undefined) routerPulse[arrivedAt] = 18;
+        // TTL expired → drop the packet here and emit an ICMP time-exceeded reply.
+        if (p.ttl <= 0 && p.hop < p.path.length - 1) {
+          const cd = rs[p.path[p.hop]];
+          drops.push({ x: cd.x * W, y: cd.y * H, age: 0, proto: p.proto });
+          statBucketDrops++;
+          p.hop = p.path.length;  // mark for removal
+          return;
+        }
+        if (p.hop >= p.path.length - 1) return;
+      }
       const c = rs[p.path[p.hop]], n2 = rs[p.path[Math.min(p.hop + 1, p.path.length - 1)]];
       p._cx = (c.x + (n2.x - c.x) * p.prog) * W; p._cy = (c.y + (n2.y - c.y) * p.prog) * H;
       p.trail.push({ x: p._cx, y: p._cy }); if (p.trail.length > 4) p.trail.shift();
-      // Note: mouseX/mouseY from window are used for hover — skip hover in TS module, handled by BgCanvas
-      const isHov = false;
       const col = protoColor[p.proto] || 'rgba(100,100,110,';
+      // Trail (shape-agnostic, just dots).
       p.trail.forEach((tp, tidx) => {
-        const trailAlpha = ((tidx + 1) / p.trail.length) * 0.6 * a, trailRadius = 5 * (tidx + 1) / p.trail.length;
-        ctx.fillStyle = `${col}${trailAlpha})`; ctx.beginPath(); ctx.arc(tp.x, tp.y, trailRadius, 0, Math.PI * 2); ctx.fill();
+        const trailAlpha = ((tidx + 1) / p.trail.length) * 0.55 * a;
+        const trailRadius = 5 * (tidx + 1) / p.trail.length;
+        ctx.fillStyle = `${col}${trailAlpha})`;
+        ctx.beginPath(); ctx.arc(tp.x, tp.y, trailRadius, 0, Math.PI * 2); ctx.fill();
       });
-      ctx.fillStyle = isHov ? `${col}0.9)` : `${col}${0.8 * a})`;
-      ctx.beginPath(); ctx.arc(p._cx, p._cy, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = `${col}${0.8 * a})`; ctx.font = '9px Courier New'; ctx.textAlign = 'center';
-      ctx.fillText(`${p.proto} TTL=${p.ttl}`, p._cx, p._cy - 11);
+      // Head — protocol-specific shape.
+      drawPacket(ctx, p._cx, p._cy, 5.5, p.proto, `${col}${0.9 * a})`);
+      // Hot label showing protocol + remaining TTL (red if low).
+      const ttlCol = p.ttl <= 2 ? 'rgba(190,18,60,' : col;
+      ctx.fillStyle = `${ttlCol}${0.88 * a})`;
+      ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'center';
+      ctx.fillText(`${p.proto} TTL=${p.ttl}`, p._cx, p._cy - 12);
+    });
+    // ── Drop animations: red X + "ICMP time-exceeded" label ──
+    drops.forEach(d => {
+      const u = d.age / 50;
+      const fade = 1 - u;
+      const r = 8 + u * 10;
+      // Red X.
+      ctx.strokeStyle = `rgba(190,18,60,${0.85 * fade * a})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(d.x - r, d.y - r); ctx.lineTo(d.x + r, d.y + r);
+      ctx.moveTo(d.x + r, d.y - r); ctx.lineTo(d.x - r, d.y + r);
+      ctx.stroke();
+      // Expanding ring.
+      ctx.strokeStyle = `rgba(190,18,60,${0.4 * fade * a})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(d.x, d.y, r + u * 14, 0, Math.PI * 2); ctx.stroke();
+      // Label.
+      if (u < 0.7) {
+        ctx.fillStyle = `rgba(190,18,60,${0.85 * fade * a})`;
+        ctx.font = 'bold 8px Courier New'; ctx.textAlign = 'center';
+        ctx.fillText('ICMP time-exceeded', d.x, d.y - r - 6);
+      }
     });
     if (tcpState === 1) synAckPkt = null;
     if (tcpState === 2 && !synAckPkt) synAckPkt = { hop: 0, prog: 0, spd: .014, trail: [] };
@@ -336,7 +559,47 @@ const L6 = (() => {
         ctx.fillText('SYN-ACK ←', sx2, sy2 - 11);
       }
     }
-    drawTCP(ctx, W, H, a);
+    // TCP handshake panel removed — the multi-source/destination routing
+    // takes up the full width now. Handshake info still visible via packet
+    // labels (SYN / ACK / etc.) flowing through the network.
+
+    // ── Live stats panel (bottom-right) ──
+    statSampleT++;
+    if (statSampleT >= 60) {
+      stats.pps = statBucketPkts;
+      stats.bps = statBucketBytes;
+      stats.dps = statBucketDrops;
+      statBucketPkts = 0; statBucketBytes = 0; statBucketDrops = 0;
+      statSampleT = 0;
+    }
+    stats.activeFlows = pkts.length;
+    {
+      const spW = 168, spH = 64;
+      const spX = W - spW - 12, spY = H - spH - 12;
+      ctx.fillStyle = `rgba(248,250,253,${0.92 * a})`;
+      ctx.strokeStyle = ink(.3 * a); ctx.lineWidth = 1;
+      ctx.fillRect(spX, spY, spW, spH); ctx.strokeRect(spX, spY, spW, spH);
+      ctx.fillStyle = ink(.55 * a);
+      ctx.font = 'bold 8px Courier New'; ctx.textAlign = 'left';
+      ctx.fillText('NETSTAT', spX + 8, spY + 12);
+      ctx.font = '9px Courier New';
+      ctx.fillStyle = ink(.6 * a);
+      ctx.fillText('pkts/s', spX + 8, spY + 26);
+      ctx.fillText('bytes/s', spX + 8, spY + 38);
+      ctx.fillText('flows', spX + 8, spY + 50);
+      ctx.fillText('drops/s', spX + 8, spY + 60);
+      ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'right';
+      ctx.fillStyle = `rgba(29,78,216,${0.9 * a})`;
+      ctx.fillText(String(stats.pps), spX + spW - 8, spY + 26);
+      ctx.fillStyle = `rgba(29,78,216,${0.9 * a})`;
+      ctx.fillText(stats.bps.toLocaleString(), spX + spW - 8, spY + 38);
+      ctx.fillStyle = `rgba(21,128,61,${0.9 * a})`;
+      ctx.fillText(String(stats.activeFlows), spX + spW - 8, spY + 50);
+      ctx.fillStyle = stats.dps > 0 ? `rgba(190,18,60,${0.9 * a})` : ink(.5 * a);
+      ctx.fillText(String(stats.dps), spX + spW - 8, spY + 60);
+    }
+
+    ctx.restore();
   };
 })();
 
@@ -362,6 +625,12 @@ const L5 = (() => {
 
   return function draw(ctx: Ctx, W: number, H: number, a: number) {
     t++;
+    // Right-area wrap (avoids the section text card on the left).
+    ctx.save();
+    const _rightX = W * 0.42, _fitS = (W - _rightX) / W;
+    ctx.translate(Math.round(_rightX), Math.round((H - H * _fitS) / 2));
+    ctx.scale(_fitS, _fitS);
+
     const xs = [W * .11, W * .34, W * .57, W * .80], cy = H / 2;
     ['SOURCE', 'TOKENS', 'AST', 'ASM'].forEach((h, i) => {
       ctx.fillStyle = ink(.25 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'center'; ctx.fillText(h, xs[i], cy - 128);
@@ -438,276 +707,638 @@ const L5 = (() => {
       ctx.fillStyle = `rgba(244,244,245,${.9 * a})`; ctx.font = '8px Courier New'; ctx.textAlign = 'center';
       ctx.fillText(p.label, p.x, p.y + 3);
     });
+
+    ctx.restore();
   };
 })();
 
-// ── L4: OoO Tomasulo — 4-box overview + hover detail ──
+// ── L4: OoO Tomasulo — pipelined view with wakeup-select + Gantt timeline ──
 export let L4_hov = -1;
 const L4 = (() => {
-  let t = 0;
-  const iNms = ['ADD', 'MUL', 'LOAD', 'FMUL', 'AND', 'STR', 'MUL', 'XOR'];
-  const iTps = ['INT', 'MUL', 'LOAD', 'MUL', 'INT', 'STR', 'MUL', 'INT'];
-  const iCls = ['#1d4ed8', '#7e22ce', '#b45309', '#15803d', '#1d4ed8', '#b45309', '#be123c', '#1d4ed8'];
-  let rob: ({ nm: string; cl: string; done: boolean; tag: string } | null)[] = Array(12).fill(null);
-  let robHead = 0, robTail = 0;
-  const rsCap: Record<string, number> = { INT: 3, LOAD: 2, MUL: 2, STR: 2 };
-  const rsE: Record<string, { nm: string; cl: string; tag: string; rdy: boolean; tmr: number }[]> = { INT: [], LOAD: [], MUL: [], STR: [] };
-  let rat: (string | null)[] = Array(8).fill(null);
-  type Fe = { nm: string; tp: string; cl: string; st: number; age: number; regIdx: number; gone?: boolean };
-  let fe: Fe[] = [], iSeq = 0, cdb: { nm: string; tag: string; prog: number; cl: string } | null = null;
-  const fuBusy: Record<string, number> = { INT: 0, LOAD: 0, MUL: 0, STR: 0 };
-  let robFlash = { tag: null as string | null, timer: 0 }, ratFlash = { tag: null as string | null, timer: 0 };
-  type Flow = { x0: number; y0: number; x1: number; y1: number; cpx: number; cpy: number; cl: string; nm: string; phase: string; spd: number; prog: number };
-  let flows: Flow[] = [];
+  // ===== Pipeline state =====
+  let t = 0, cycle = 0;
+  const FRAMES_PER_CYCLE = 14;  // ~4.3 cycles/sec
+  type InstDef = { op: string; dst: number; src1: number; src2: number; tp: string; cl: string; lat: number; isBranch?: boolean; isLoad?: boolean; isStore?: boolean };
+  const STREAM: InstDef[] = [
+    { op: 'add',  dst: 5, src1: 1, src2: 3, tp: 'INT',  cl: '#1d4ed8', lat: 1 },
+    { op: 'mul',  dst: 2, src1: 5, src2: 4, tp: 'MUL',  cl: '#7e22ce', lat: 4 },
+    { op: 'ld',   dst: 7, src1: 2, src2: 0, tp: 'LOAD', cl: '#b45309', lat: 6, isLoad: true },
+    { op: 'xor',  dst: 3, src1: 7, src2: 1, tp: 'INT',  cl: '#1d4ed8', lat: 1 },
+    { op: 'st',   dst: 0, src1: 3, src2: 6, tp: 'STR',  cl: '#15803d', lat: 2, isStore: true },
+    { op: 'mul',  dst: 6, src1: 3, src2: 7, tp: 'MUL',  cl: '#be123c', lat: 4 },
+    { op: 'add',  dst: 1, src1: 6, src2: 2, tp: 'INT',  cl: '#1d4ed8', lat: 1 },
+    { op: 'bnz',  dst: 0, src1: 5, src2: 0, tp: 'INT',  cl: '#0891b2', lat: 1, isBranch: true },
+    { op: 'and',  dst: 4, src1: 1, src2: 6, tp: 'INT',  cl: '#1d4ed8', lat: 1 },
+    { op: 'ld',   dst: 0, src1: 4, src2: 0, tp: 'LOAD', cl: '#b45309', lat: 6, isLoad: true },
+    { op: 'sub',  dst: 6, src1: 5, src2: 4, tp: 'INT',  cl: '#1d4ed8', lat: 1 },
+    { op: 'mul',  dst: 7, src1: 6, src2: 3, tp: 'MUL',  cl: '#7e22ce', lat: 4 },
+  ];
+  let streamIdx = 0, instSeq = 0;
+  type Inst = {
+    seq: number; op: string; dst: number; src1: number; src2: number;
+    src1Tag: string | null; src2Tag: string | null;
+    rdy1: boolean; rdy2: boolean;
+    tp: string; cl: string; lat: number;
+    tag: string;
+    speculative: boolean;
+    isBranch: boolean; isLoad: boolean; isStore: boolean;
+    cF: number; cI: number; cX: number; cW: number; cC: number;
+  };
+  let feQueue: Inst[] = [];
+  const FE_CAP = 3;
   const rsTypes = ['INT', 'LOAD', 'MUL', 'STR'];
+  const rsE: Record<string, Inst[]> = { INT: [], LOAD: [], MUL: [], STR: [] };
+  const rsCap: Record<string, number> = { INT: 3, LOAD: 2, MUL: 2, STR: 2 };
   const rsCl: Record<string, string> = { INT: '#1d4ed8', LOAD: '#b45309', MUL: '#7e22ce', STR: '#15803d' };
+  type FU = { inst: Inst | null; remaining: number; total: number };
+  const fu: Record<string, FU> = {
+    INT: { inst: null, remaining: 0, total: 0 },
+    LOAD: { inst: null, remaining: 0, total: 0 },
+    MUL: { inst: null, remaining: 0, total: 0 },
+    STR: { inst: null, remaining: 0, total: 0 },
+  };
+  let rob: (Inst | null)[] = Array(12).fill(null);
+  let robHead = 0, robTail = 0;
+  let rat: (string | null)[] = Array(8).fill(null);
+  let cdb: { tag: string; value: number; cl: string; prog: number } | null = null;
+  let specBranch: Inst | null = null;
+  let squashTimer = 0;
+  type GanttEntry = { seq: number; op: string; dst: number; src1: number; src2: number; cl: string;
+                       cF: number; cI: number; cX: number; cW: number; cC: number;
+                       speculative: boolean; squashed: boolean };
+  let ganttHistory: GanttEntry[] = [];
+  const GANTT_ROWS = 6;
+  const ipcHist: number[] = Array(60).fill(1.5);
+  let ipcPtr = 0, commitCount = 0, ipcSampleC = 0;
+  let robFlash: { tag: string | null; timer: number } = { tag: null, timer: 0 };
+  let ratFlash: { tag: string | null; timer: number } = { tag: null, timer: 0 };
+  type WakeArrow = { tag: string; consumerSeq: number; age: number };
+  let wakeArrows: WakeArrow[] = [];
 
-  function spawnFlow(x0: number, y0: number, x1: number, y1: number, cpx: number, cpy: number, cl: string, nm: string, phase: string, spd = .055) {
-    flows.push({ x0, y0, x1, y1, cpx, cpy, cl, nm, phase, spd, prog: 0 });
+  function instLabel(inst: { op: string; dst: number; src1: number; src2: number }, full: boolean): string {
+    const dst = inst.dst > 0 ? 'r' + inst.dst : '';
+    const s1 = inst.src1 > 0 ? 'r' + inst.src1 : '';
+    const s2 = inst.src2 > 0 ? 'r' + inst.src2 : '';
+    if (full) {
+      const parts: string[] = [];
+      if (dst) parts.push(dst);
+      if (s1) parts.push(s1);
+      if (s2) parts.push(s2);
+      return inst.op + ' ' + parts.join(',');
+    }
+    return inst.op + (dst ? ' ' + dst : '');
+  }
+  function pushToGantt(inst: Inst, squashed: boolean) {
+    ganttHistory.push({
+      seq: inst.seq, op: inst.op, dst: inst.dst, src1: inst.src1, src2: inst.src2,
+      cl: inst.cl, cF: inst.cF, cI: inst.cI, cX: inst.cX, cW: inst.cW, cC: inst.cC,
+      speculative: inst.speculative, squashed,
+    });
+    while (ganttHistory.length > 24) ganttHistory.shift();
+  }
+
+  function tick() {
+    cycle++;
+    // 1. COMMIT (up to 2 per cycle, in-order from ROB head)
+    let committed = 0;
+    while (committed < 2) {
+      const headSlot = robHead % 12;
+      const headInst = rob[headSlot];
+      if (!headInst || headInst.cW < 0) break;
+      headInst.cC = cycle;
+      pushToGantt(headInst, false);
+      rob[headSlot] = null;
+      robHead++;
+      commitCount++;
+      committed++;
+      if (rat.includes(headInst.tag)) rat = rat.map(r => r === headInst.tag ? null : r);
+    }
+    // 2. WRITEBACK: broadcast a finished FU's result on the CDB, wake up dependents
+    if (!cdb) {
+      for (const tp of rsTypes) {
+        const f = fu[tp];
+        if (f.inst && f.remaining === 0) {
+          const done = f.inst;
+          cdb = { tag: done.tag, value: (done.seq * 7 + 0x42) & 0xff, cl: done.cl, prog: 0 };
+          done.cW = cycle;
+          for (const tp2 of rsTypes) {
+            for (const rsi of rsE[tp2]) {
+              let woke = false;
+              if (rsi.src1Tag === done.tag) { rsi.src1Tag = null; rsi.rdy1 = true; woke = true; }
+              if (rsi.src2Tag === done.tag) { rsi.src2Tag = null; rsi.rdy2 = true; woke = true; }
+              if (woke) wakeArrows.push({ tag: done.tag, consumerSeq: rsi.seq, age: 0 });
+            }
+          }
+          robFlash = { tag: done.tag, timer: 18 };
+          ratFlash = { tag: done.tag, timer: 18 };
+          if (done.isBranch && specBranch === done) {
+            if (Math.random() < 0.3) {
+              squashTimer = 28;
+              feQueue.forEach(i => { if (i.speculative && i.seq > done.seq) pushToGantt(i, true); });
+              feQueue = feQueue.filter(i => !i.speculative || i.seq <= done.seq);
+              for (const tp2 of rsTypes) {
+                rsE[tp2].forEach(i => { if (i.speculative && i.seq > done.seq) pushToGantt(i, true); });
+                rsE[tp2] = rsE[tp2].filter(i => !i.speculative || i.seq <= done.seq);
+              }
+              for (const tp2 of rsTypes) {
+                const fi = fu[tp2].inst;
+                if (fi && fi.speculative && fi.seq > done.seq) {
+                  pushToGantt(fi, true);
+                  fu[tp2].inst = null; fu[tp2].remaining = 0; fu[tp2].total = 0;
+                }
+              }
+              for (let i = robHead; i < robTail; i++) {
+                const slot = rob[i % 12];
+                if (slot && slot.speculative && slot.seq > done.seq) rob[i % 12] = null;
+              }
+              let newTail = robHead;
+              for (let i = robHead; i < robHead + 12; i++) {
+                if (rob[i % 12]) newTail = i + 1;
+              }
+              robTail = newTail;
+              for (let i = 0; i < 8; i++) {
+                const tag = rat[i];
+                if (tag) {
+                  let found = false;
+                  for (let r = robHead; r < robTail; r++) if (rob[r % 12]?.tag === tag) { found = true; break; }
+                  if (!found) rat[i] = null;
+                }
+              }
+            }
+            feQueue.forEach(i => { i.speculative = false; });
+            for (const tp2 of rsTypes) rsE[tp2].forEach(i => { i.speculative = false; });
+            for (let i = robHead; i < robTail; i++) { const s = rob[i % 12]; if (s) s.speculative = false; }
+            specBranch = null;
+          }
+          f.inst = null; f.remaining = 0; f.total = 0;
+          break;
+        }
+      }
+    }
+    // 3. EXECUTE: tick down running FUs
+    for (const tp of rsTypes) {
+      const f = fu[tp];
+      if (f.inst && f.remaining > 0) f.remaining--;
+    }
+    // 4. ISSUE: pick a ready RS entry per FU type and dispatch
+    for (const tp of rsTypes) {
+      const f = fu[tp];
+      if (f.inst === null) {
+        const idx = rsE[tp].findIndex(e => e.rdy1 && e.rdy2);
+        if (idx >= 0) {
+          const inst = rsE[tp][idx];
+          f.inst = inst;
+          f.remaining = inst.lat;
+          f.total = inst.lat;
+          inst.cX = cycle;
+          rsE[tp].splice(idx, 1);
+        }
+      }
+    }
+    // 5. DISPATCH (rename + ROB alloc): up to 2 from feQueue → RS
+    let dispatchedThisCycle = 0;
+    while (feQueue.length > 0 && dispatchedThisCycle < 2) {
+      const inst = feQueue[0];
+      if (rsE[inst.tp].length >= rsCap[inst.tp]) break;
+      if (robTail - robHead >= 12) break;
+      inst.tag = 'T' + (robTail % 12);
+      if (inst.src1 > 0 && rat[inst.src1]) { inst.src1Tag = rat[inst.src1]; inst.rdy1 = false; }
+      if (inst.src2 > 0 && rat[inst.src2]) { inst.src2Tag = rat[inst.src2]; inst.rdy2 = false; }
+      rob[robTail % 12] = inst;
+      if (inst.dst > 0) rat[inst.dst] = inst.tag;
+      robTail++;
+      inst.cI = cycle;
+      rsE[inst.tp].push(inst);
+      feQueue.shift();
+      dispatchedThisCycle++;
+    }
+    // 6. FETCH: fill FE queue
+    while (feQueue.length < FE_CAP) {
+      const def = STREAM[streamIdx % STREAM.length];
+      const inst: Inst = {
+        seq: instSeq++, op: def.op, dst: def.dst, src1: def.src1, src2: def.src2,
+        src1Tag: null, src2Tag: null, rdy1: true, rdy2: true,
+        tp: def.tp, cl: def.cl, lat: def.lat, tag: '',
+        speculative: !!specBranch,
+        isBranch: !!def.isBranch, isLoad: !!def.isLoad, isStore: !!def.isStore,
+        cF: cycle, cI: -1, cX: -1, cW: -1, cC: -1,
+      };
+      feQueue.push(inst);
+      streamIdx++;
+      if (def.isBranch && !specBranch) specBranch = inst;
+    }
   }
 
   return function draw(ctx: Ctx, W: number, H: number, a: number) {
     t++;
-    const sx = W * .42, ag = Math.max(12, Math.floor(W * .018));
-    const bW = Math.floor((W * .56 - 3 * ag) / 4), bH = 72, bY = H * .42;
-    const bX = [sx, sx + bW + ag, sx + 2 * (bW + ag), sx + 3 * (bW + ag)];
-    const bCX = bX.map(x => x + bW / 2), bCY = bY + bH / 2;
-    const dpY = bY + bH + 18, dpH = 170;
-    if (t % 22 === 0 && fe.length < 4) {
-      const idx = iSeq % iNms.length;
-      fe.push({ nm: iNms[idx], tp: iTps[idx], cl: iCls[idx], st: 0, age: 0, regIdx: iSeq % 8 });
-      iSeq++;
-    }
-    fe.forEach(p => p.age++);
-    fe.filter(p => p.st < 2 && p.age > 10).forEach(p => {
-      const jx = bCX[0] + (p.st === 0 ? -14 : 14);
-      spawnFlow(jx, bCY, jx + 28, bCY, jx + 14, bCY - 12, p.cl, p.nm, 'fe', .1);
-      p.st++; p.age = 0;
-    });
-    fe.filter(p => p.st === 2 && p.age > 8).forEach(p => {
-      if (rsE[p.tp].length < rsCap[p.tp] && (robTail - robHead) < 12) {
-        const tag = 'T' + (robTail % 12);
-        rsE[p.tp].push({ nm: p.nm, cl: p.cl, tag, rdy: false, tmr: 0 });
-        rob[robTail % 12] = { nm: p.nm, cl: p.cl, done: false, tag };
-        rat[p.regIdx] = tag; robTail++;
-        spawnFlow(bCX[0], bCY, bCX[1], bCY, (bCX[0] + bCX[1]) / 2, bCY - 30, p.cl, p.nm, 'dispatch', .05);
-        p.gone = true;
-      }
-    });
-    fe = fe.filter(p => !p.gone);
-    Object.entries(rsE).forEach(([tp, arr]) => {
-      arr.forEach(e => { e.tmr++; if (!e.rdy && e.tmr > 8) e.rdy = true; });
-      if (fuBusy[tp] === 0) {
-        const ri = arr.findIndex(e => e.rdy);
-        if (ri >= 0) {
-          const e = arr[ri];
-          fuBusy[tp] = tp === 'MUL' ? 32 : tp === 'LOAD' ? 50 : 40;
-          const ri2 = parseInt(e.tag.slice(1));
-          if (rob[ri2]) rob[ri2]!.done = true;
-          rat = rat.map(r => r === e.tag ? null : r);
-          spawnFlow(bCX[1], bCY, bCX[2], bCY, (bCX[1] + bCX[2]) / 2, bCY - 30, e.cl, e.nm, 'rs_fu', .065);
-          if (!cdb) cdb = { nm: e.nm, tag: e.tag, prog: 0, cl: e.cl };
-          arr.splice(ri, 1);
-        }
-      } else fuBusy[tp]--;
-    });
-    if (cdb) {
-      cdb.prog += 0.025;
-      if (cdb.prog >= 1) { robFlash = { tag: cdb.tag, timer: 22 }; ratFlash = { tag: cdb.tag, timer: 22 }; cdb = null; }
-    }
+    const tickNow = (t % FRAMES_PER_CYCLE) === 0;
+    if (tickNow) tick();
     if (robFlash.timer > 0) robFlash.timer--;
     if (ratFlash.timer > 0) ratFlash.timer--;
-    const hi = robHead % 12;
-    if (rob[hi]?.done && t % 10 === 0) {
-      spawnFlow(bCX[3], bCY, bCX[3], bCY - 52, bCX[3] + 30, bCY - 26, rob[hi]!.cl, rob[hi]!.nm, 'commit', .062);
-      rob[hi] = null; robHead++;
+    if (squashTimer > 0) squashTimer--;
+    wakeArrows = wakeArrows.filter(w => ++w.age < 24);
+    if (cdb) {
+      cdb.prog += 0.045;
+      if (cdb.prog >= 1) cdb = null;
     }
-    flows.forEach(f => f.prog = Math.min(1, f.prog + f.spd));
-    flows = flows.filter(f => f.prog < 1);
-    const boxLabels = ['FE / Issue', 'RS / Dispatch', 'Func. Units', 'ROB + RAT'];
+    ipcSampleC++;
+    if (ipcSampleC >= 60) {
+      const cyclesInSample = ipcSampleC / FRAMES_PER_CYCLE;
+      ipcHist[ipcPtr] = Math.max(.3, Math.min(3.2, commitCount / Math.max(1, cyclesInSample)));
+      ipcPtr = (ipcPtr + 1) % ipcHist.length;
+      commitCount = 0;
+      ipcSampleC = 0;
+    }
+
+    // ===== Layout =====
+    const sx = W * .42;
+    const wAvail = W - sx - 8;
+    const ag = Math.max(10, Math.floor(wAvail * .018));
+    const bW = Math.floor((wAvail - 3 * ag) / 4);
+    const bH = 76;
+    const y0Top = Math.max(40, (H - 440) / 2);
+    const titleY = y0Top + 14;
+    const boxesY = y0Top + 38;
+    const miniROBY = boxesY + bH + 18;
+    const ratY = miniROBY + 42;
+    const ganttY = ratY + 28;
+    const bX = [sx, sx + bW + ag, sx + 2 * (bW + ag), sx + 3 * (bW + ag)];
+
+    // ===== Top strip: cycle counter + clock pulse + title + IPC =====
+    const clockPhase = (t % FRAMES_PER_CYCLE) / FRAMES_PER_CYCLE;
+    const clockPulse = clockPhase < 0.25 ? 1 - clockPhase * 4 : 0;
+    ctx.fillStyle = `rgba(34,197,94,${(.55 + clockPulse * .4) * a})`;
+    ctx.font = 'bold 14px Courier New';
+    ctx.textAlign = 'left';
+    ctx.fillText('cycle ' + cycle, sx, titleY);
+    ctx.fillStyle = `rgba(34,197,94,${.85 * (.3 + clockPulse) * a})`;
+    ctx.beginPath();
+    ctx.arc(sx + 78, titleY - 4, 3 + clockPulse * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = ink(.55 * a);
+    ctx.font = 'bold 11px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText('Tomasulo OoO Machine · wakeup-select + ROB commit', sx + wAvail / 2, titleY);
+    // IPC sparkline
+    const spkW = 130, spkH = 22;
+    const spkX = sx + wAvail - spkW, spkY = titleY - 16;
+    ctx.fillStyle = `rgba(244,244,245,${.55 * a})`;
+    ctx.strokeStyle = ink(.14 * a); ctx.lineWidth = 1;
+    ctx.fillRect(spkX, spkY, spkW, spkH); ctx.strokeRect(spkX, spkY, spkW, spkH);
+    ctx.fillStyle = ink(.4 * a); ctx.font = '7px Courier New'; ctx.textAlign = 'left';
+    ctx.fillText('IPC', spkX + 4, spkY + 9);
+    const lastIpc = ipcHist[(ipcPtr - 1 + ipcHist.length) % ipcHist.length];
+    ctx.fillStyle = ink(.65 * a); ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'right';
+    ctx.fillText(lastIpc.toFixed(2), spkX + spkW - 4, spkY + 10);
+    ctx.strokeStyle = `rgba(21,128,61,${.75 * a})`; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (let i = 0; i < ipcHist.length; i++) {
+      const idx = (ipcPtr + i) % ipcHist.length;
+      const px = spkX + 24 + (i / (ipcHist.length - 1)) * (spkW - 30);
+      const py = spkY + spkH - 3 - (ipcHist[idx] / 3.5) * (spkH - 10);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    // Branch speculation indicator
+    if (specBranch) {
+      ctx.fillStyle = `rgba(244,114,182,${.85 * a})`;
+      ctx.font = 'bold 8px Courier New';
+      ctx.textAlign = 'left';
+      ctx.fillText('▸ SPEC bnz #' + specBranch.seq, sx + 100, titleY);
+    }
+
+    // ===== 4 stage boxes =====
+    const boxLabels = ['FE / Issue', 'RS / Wakeup', 'Func. Units', 'ROB + RAT'];
     const boxAccent = ['rgba(29,78,216,', 'rgba(180,83,9,', 'rgba(126,34,206,', 'rgba(21,128,61,'];
-    const dotSets = [
-      fe.map(p => ({ cl: p.cl, nm: p.nm })),
-      Object.values(rsE).flat().map(e => ({ cl: e.cl, nm: e.nm })),
-      rsTypes.filter(tp => fuBusy[tp] > 0).map(tp => ({ cl: rsCl[tp], nm: tp })),
-      rob.filter(r => r).map(r => ({ cl: r!.cl, nm: r!.nm })),
-    ];
-    ctx.fillStyle = ink(.22 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'left';
-    ctx.fillText('Tomasulo Out-of-Order Machine', sx, bY - 14);
-    boxLabels.forEach((lbl, i) => {
-      const x = bX[i], y = bY, isHov = L4_hov === i;
-      ctx.fillStyle = boxAccent[i] + (.07 * a) + ')';
-      ctx.strokeStyle = boxAccent[i] + (isHov ? .6 : .2) * a + ')';
+    for (let bi = 0; bi < 4; bi++) {
+      const x = bX[bi], y = boxesY;
+      const isHov = L4_hov === bi;
+      ctx.fillStyle = boxAccent[bi] + (.07 * a) + ')';
+      ctx.strokeStyle = boxAccent[bi] + ((isHov ? .65 : .3) * a) + ')';
       ctx.lineWidth = isHov ? 1.5 : 1;
       ctx.fillRect(x, y, bW, bH); ctx.strokeRect(x, y, bW, bH);
-      ctx.fillStyle = boxAccent[i] + (.72 * a) + ')';
-      ctx.font = 'bold 10px Courier New'; ctx.textAlign = 'center';
-      ctx.fillText(lbl, x + bW / 2, y + 15);
-      const dots = dotSets[i], dR = 5, dSp = 13, maxDots = Math.min(dots.length, 9);
-      const dotRowW = maxDots * dSp - dSp + dR * 2, dotX0 = x + bW / 2 - dotRowW / 2 + dR;
-      dots.slice(0, 9).forEach((d, di) => {
-        ctx.fillStyle = d.cl; ctx.globalAlpha = .85 * a;
-        ctx.beginPath(); ctx.arc(dotX0 + di * dSp, y + bH / 2 + 10, dR, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = boxAccent[bi] + (.75 * a) + ')';
+      ctx.font = 'bold 10px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(boxLabels[bi], x + bW / 2, y + 13);
+    }
+
+    // Box 0: FE — show instruction queue with real operands
+    {
+      const x = bX[0], y = boxesY;
+      ctx.font = '8px Courier New';
+      ctx.textAlign = 'left';
+      feQueue.slice(0, 3).forEach((inst, j) => {
+        const ly = y + 26 + j * 12;
+        const isSpec = inst.speculative;
+        ctx.fillStyle = isSpec ? `rgba(244,114,182,${.88 * a})` : ink(.7 * a);
+        ctx.fillText(instLabel(inst, true), x + 6, ly);
+        if (isSpec) {
+          ctx.fillStyle = `rgba(244,114,182,${.55 * a})`;
+          ctx.font = '6px Courier New';
+          ctx.fillText('spec', x + bW - 22, ly);
+          ctx.font = '8px Courier New';
+        }
       });
-      ctx.fillStyle = boxAccent[i] + (.38 * a) + ')'; ctx.font = '8px Courier New'; ctx.textAlign = 'center';
-      ctx.fillText(dots.length + ' active', x + bW / 2, y + bH - 5);
-    });
+      ctx.fillStyle = ink(.4 * a);
+      ctx.font = '7px Courier New';
+      ctx.textAlign = 'right';
+      ctx.fillText(feQueue.length + '/' + FE_CAP + ' fetched', x + bW - 4, y + bH - 4);
+    }
+
+    // Box 1: RS — entries with ready/waiting state
+    {
+      const x = bX[1], y = boxesY;
+      const colW = (bW - 8) / 4;
+      rsTypes.forEach((tp, ti) => {
+        const cxx = x + 4 + ti * colW;
+        ctx.fillStyle = rsCl[tp];
+        ctx.globalAlpha = .9 * a;
+        ctx.font = 'bold 7px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText(tp, cxx + colW / 2, y + 25);
+        ctx.globalAlpha = 1;
+        const entries = rsE[tp];
+        entries.slice(0, 3).forEach((inst, j) => {
+          const ey = y + 29 + j * 14;
+          const allRdy = inst.rdy1 && inst.rdy2;
+          ctx.fillStyle = allRdy ? `rgba(21,128,61,${.62 * a})` : `rgba(110,110,120,${.45 * a})`;
+          ctx.fillRect(cxx + 2, ey, colW - 4, 12);
+          ctx.fillStyle = `rgba(255,255,255,${.95 * a})`;
+          ctx.font = 'bold 7px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText(inst.tag + (allRdy ? '·R' : ''), cxx + colW / 2, ey + 9);
+        });
+      });
+    }
+
+    // Box 2: FU — latency bars (always visible)
+    {
+      const x = bX[2], y = boxesY;
+      const rowH = (bH - 22) / 4;
+      rsTypes.forEach((tp, ti) => {
+        const ry = y + 22 + ti * rowH;
+        const f = fu[tp];
+        ctx.fillStyle = rsCl[tp];
+        ctx.globalAlpha = .9 * a;
+        ctx.font = 'bold 7px Courier New';
+        ctx.textAlign = 'left';
+        ctx.fillText(tp, x + 4, ry + 9);
+        ctx.globalAlpha = 1;
+        const barX = x + 28, barW2 = bW - 36, barH = 8;
+        ctx.fillStyle = `rgba(220,220,225,${.55 * a})`;
+        ctx.fillRect(barX, ry + 3, barW2, barH);
+        if (f.inst) {
+          const prog = (f.total - f.remaining) / Math.max(1, f.total);
+          ctx.fillStyle = f.inst.cl;
+          ctx.globalAlpha = .88 * a;
+          ctx.fillRect(barX, ry + 3, barW2 * prog, barH);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = ink(.55 * a);
+          ctx.font = '6px Courier New';
+          ctx.textAlign = 'right';
+          ctx.fillText(f.inst.tag, barX + barW2 - 2, ry + rowH - 1);
+        } else {
+          ctx.fillStyle = ink(.3 * a);
+          ctx.font = '6px Courier New';
+          ctx.textAlign = 'right';
+          ctx.fillText('idle', barX + barW2 - 2, ry + rowH - 1);
+        }
+      });
+    }
+
+    // Box 3: ROB + RAT summary
+    {
+      const x = bX[3], y = boxesY;
+      const robCount = rob.filter(r => r).length;
+      const ratCount = rat.filter(r => r).length;
+      const ready = Object.values(rsE).reduce((s, e) => s + e.filter(i => i.rdy1 && i.rdy2).length, 0);
+      const waiting = Object.values(rsE).reduce((s, e) => s + e.filter(i => !(i.rdy1 && i.rdy2)).length, 0);
+      ctx.fillStyle = ink(.6 * a);
+      ctx.font = '8px Courier New';
+      ctx.textAlign = 'left';
+      ctx.fillText('ROB  ' + robCount + '/12', x + 6, y + 26);
+      ctx.fillText('RAT  ' + ratCount + '/8', x + 6, y + 38);
+      ctx.fillStyle = `rgba(21,128,61,${.78 * a})`;
+      ctx.fillText('rdy  ' + ready, x + 6, y + 52);
+      ctx.fillStyle = ink(.45 * a);
+      ctx.fillText('wait ' + waiting, x + 6, y + 64);
+    }
+
+    // Arrows between boxes
     for (let i = 0; i < 3; i++) {
-      const ax = bX[i] + bW + 2, ay = bCY, aw = ag - 4;
-      ctx.strokeStyle = ink(.18 * a); ctx.lineWidth = 1;
+      const ax = bX[i] + bW + 2, ay = boxesY + bH / 2, aw = ag - 6;
+      ctx.strokeStyle = ink(.25 * a); ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + aw, ay); ctx.stroke();
-      ctx.fillStyle = ink(.18 * a);
+      ctx.fillStyle = ink(.25 * a);
       ctx.beginPath(); ctx.moveTo(ax + aw - 4, ay - 3); ctx.lineTo(ax + aw, ay); ctx.lineTo(ax + aw - 4, ay + 3); ctx.fill();
     }
+
+    // ===== Mini-ROB strip (always visible) =====
     {
-      const x0 = bCX[2], x1 = bCX[1], arcY = bY - 28;
-      ctx.strokeStyle = cdb ? `rgba(126,34,206,${.5 * a})` : ink(.1 * a);
-      ctx.lineWidth = cdb ? 1.5 : 1; ctx.setLineDash(cdb ? [] : [3, 4]);
-      ctx.beginPath(); ctx.moveTo(x0, bY);
-      ctx.quadraticCurveTo((x0 + x1) / 2, arcY, x1, bY);
-      ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = ink(.2 * a); ctx.font = '7px Courier New'; ctx.textAlign = 'center';
-      ctx.fillText('CDB', (x0 + x1) / 2, arcY - 4);
-      if (cdb) {
-        const cx2 = bz(cdb.prog, x0, (x0 + x1) / 2, x1), cy2 = bz(cdb.prog, bY, arcY, bY);
-        ctx.fillStyle = cdb.cl; ctx.globalAlpha = .85 * a;
-        ctx.beginPath(); ctx.arc(cx2, cy2, 5, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-        ctx.fillStyle = 'white'; ctx.font = 'bold 6px Courier New'; ctx.textAlign = 'center';
-        ctx.fillText(cdb.nm, cx2, cy2 + 2);
-      }
-    }
-    const hov = L4_hov;
-    if (hov >= 0) {
-      const px = bX[hov], panW = Math.min(hov === 3 ? bW * 2 + ag : bW, W - bX[hov] - 2);
-      ctx.fillStyle = `rgba(250,250,250,${.94 * a})`;
-      ctx.strokeStyle = boxAccent[hov] + (.3 * a) + ')'; ctx.lineWidth = 1;
-      ctx.fillRect(px, dpY, panW, dpH); ctx.strokeRect(px, dpY, panW, dpH);
-      if (hov === 0) {
-        const stages = ['IF', 'Rename', 'ROB Alloc'], sw2 = Math.floor((panW - 12) / 3), sh2 = 48;
-        stages.forEach((s, si) => {
-          const bx2 = px + 4 + si * (sw2 + 2), by2 = dpY + 12;
-          ctx.fillStyle = `rgba(29,78,216,${.07 * a})`; ctx.strokeStyle = `rgba(29,78,216,${.28 * a})`; ctx.lineWidth = 1;
-          ctx.fillRect(bx2, by2, sw2, sh2); ctx.strokeRect(bx2, by2, sw2, sh2);
-          ctx.fillStyle = `rgba(29,78,216,${.65 * a})`; ctx.font = '8px Courier New'; ctx.textAlign = 'center';
-          ctx.fillText(s, bx2 + sw2 / 2, by2 + 13);
-          const occ = fe.filter(p => p.st === si);
-          occ.forEach((p, pi) => {
-            ctx.fillStyle = p.cl; ctx.globalAlpha = .82 * a;
-            ctx.beginPath(); ctx.arc(bx2 + sw2 / 2 + (pi - occ.length / 2 + .5) * 12, by2 + 34, 5, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-          });
-        });
-        ctx.fillStyle = ink(.32 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
-        ctx.fillText('In-order fetch → rename → ROB allocation', px + 4, dpY + 80);
-        ctx.fillText('Dispatches out-of-order to RS on alloc', px + 4, dpY + 93);
-        ctx.fillText('Stalls if ROB or RS is full', px + 4, dpY + 106);
-      } else if (hov === 1) {
-        const cw = Math.floor((panW - 10) / 4) - 2;
-        rsTypes.forEach((tp, ti) => {
-          const rx2 = px + 4 + ti * (cw + 2), ry2 = dpY + 8;
-          ctx.fillStyle = rsCl[tp] + '15'; ctx.strokeStyle = rsCl[tp] + '55'; ctx.lineWidth = 1;
-          ctx.fillRect(rx2, ry2, cw, dpH - 14); ctx.strokeRect(rx2, ry2, cw, dpH - 14);
-          ctx.fillStyle = rsCl[tp]; ctx.font = 'bold 8px Courier New'; ctx.textAlign = 'center';
-          ctx.fillText(tp, rx2 + cw / 2, ry2 + 12);
-          ctx.fillStyle = ink(.3 * a); ctx.font = '7px Courier New';
-          ctx.fillText(rsE[tp].length + '/' + rsCap[tp], rx2 + cw / 2, ry2 + 23);
-          rsE[tp].forEach((e, ei) => {
-            const ey2 = ry2 + 32 + ei * 30;
-            ctx.fillStyle = e.rdy ? `rgba(21,128,61,${.5 * a})` : `rgba(100,100,100,${.25 * a})`;
-            ctx.fillRect(rx2 + 2, ey2, cw - 4, 26);
-            ctx.fillStyle = 'white'; ctx.font = 'bold 7px Courier New'; ctx.textAlign = 'center';
-            ctx.fillText(e.nm, rx2 + cw / 2, ey2 + 10);
-            ctx.fillStyle = e.rdy ? 'rgba(34,197,94,.9)' : 'rgba(160,160,160,.8)';
-            ctx.font = '6px Courier New'; ctx.fillText(e.rdy ? 'RDY' : 'wait', rx2 + cw / 2, ey2 + 20);
-          });
-        });
-      } else if (hov === 2) {
-        const cw = Math.floor((panW - 10) / 4) - 2;
-        rsTypes.forEach((tp, ti) => {
-          const fx2 = px + 4 + ti * (cw + 2), fy2 = dpY + 10;
-          const busy = fuBusy[tp] > 0, maxLat = tp === 'MUL' ? 32 : tp === 'LOAD' ? 50 : 40;
-          ctx.fillStyle = busy ? rsCl[tp] + '15' : `rgba(244,244,245,${.45 * a})`;
-          ctx.strokeStyle = busy ? rsCl[tp] + '66' : ink(.12 * a); ctx.lineWidth = busy ? 1.5 : 1;
-          ctx.fillRect(fx2, fy2, cw, dpH - 16); ctx.strokeRect(fx2, fy2, cw, dpH - 16);
-          ctx.fillStyle = rsCl[tp]; ctx.font = 'bold 8px Courier New'; ctx.textAlign = 'center';
-          ctx.fillText(tp, fx2 + cw / 2, fy2 + 13);
-          const latLbl = tp === 'MUL' ? '32cy' : tp === 'LOAD' ? '50cy' : '40cy';
-          ctx.fillStyle = ink(.3 * a); ctx.font = '7px Courier New'; ctx.fillText(latLbl, fx2 + cw / 2, fy2 + 25);
-          if (busy) {
-            const prog = 1 - fuBusy[tp] / maxLat;
-            ctx.fillStyle = rsCl[tp]; ctx.globalAlpha = .55 * a;
-            ctx.fillRect(fx2 + 3, fy2 + dpH - 32, (cw - 6) * prog, 10); ctx.globalAlpha = 1;
-            ctx.fillStyle = ink(.45 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'center';
-            ctx.fillText(Math.round(prog * 100) + '%', fx2 + cw / 2, fy2 + dpH - 46);
-            ctx.fillStyle = rsCl[tp]; ctx.font = 'bold 8px Courier New'; ctx.fillText('BUSY', fx2 + cw / 2, fy2 + 45);
-          } else { ctx.fillStyle = ink(.2 * a); ctx.font = '8px Courier New'; ctx.fillText('idle', fx2 + cw / 2, fy2 + 45); }
-        });
-      } else if (hov === 3) {
-        const robEW2 = Math.floor((panW - 10) / 12), robEH2 = 38, rRobY = dpY + 16;
-        ctx.fillStyle = ink(.28 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'left';
-        ctx.fillText('Reorder Buffer — commits in program order →', px + 4, rRobY - 3);
-        for (let i = 0; i < 12; i++) {
-          const rx2 = px + 4 + i * robEW2, e = rob[i], isH = (i === robHead % 12) && !!e;
-          const fl = robFlash.timer > 0 && robFlash.tag === e?.tag;
-          ctx.fillStyle = e ? `rgba(24,24,27,${.06 * a})` : `rgba(250,250,250,${.22 * a})`;
-          ctx.strokeStyle = fl ? `rgba(34,197,94,${.8 * a})` : (e?.done ? ink(.38 * a) : ink(.1 * a));
-          ctx.lineWidth = fl ? 2 : 1;
-          ctx.fillRect(rx2, rRobY, robEW2 - 1, robEH2); ctx.strokeRect(rx2, rRobY, robEW2 - 1, robEH2);
-          if (fl) { ctx.fillStyle = `rgba(34,197,94,${.12 * a})`; ctx.fillRect(rx2, rRobY, robEW2 - 1, robEH2); }
-          if (e) {
-            ctx.fillStyle = e.cl; ctx.globalAlpha = .72 * a;
-            ctx.beginPath(); ctx.arc(rx2 + robEW2 / 2 - .5, rRobY + 11, 4, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-            ctx.fillStyle = ink(.4 * a); ctx.font = '6px Courier New'; ctx.textAlign = 'center';
-            ctx.fillText(e.nm, rx2 + robEW2 / 2 - .5, rRobY + 26);
-            ctx.fillStyle = e.done ? `rgba(21,128,61,${.6 * a})` : `rgba(130,130,130,${.4 * a})`;
-            ctx.fillText(e.done ? '✓' : '…', rx2 + robEW2 / 2 - .5, rRobY + 36);
-          }
-          if (isH) { ctx.fillStyle = ink(.25 * a); ctx.font = '6px Courier New'; ctx.textAlign = 'center'; ctx.fillText('▲', rx2 + robEW2 / 2 - .5, rRobY - 3); }
+      ctx.fillStyle = ink(.55 * a);
+      ctx.font = 'bold 8px Courier New';
+      ctx.textAlign = 'left';
+      ctx.fillText('Reorder Buffer (in-order commit →)', sx, miniROBY - 4);
+      const robSlotW = wAvail / 12;
+      const robSlotH = 30;
+      for (let i = 0; i < 12; i++) {
+        const ex = sx + i * robSlotW;
+        const inst = rob[i];
+        const isHead = (i === robHead % 12) && !!inst;
+        const isFlash = robFlash.timer > 0 && !!inst && robFlash.tag === inst.tag;
+        const isDone = !!inst && inst.cW >= 0;
+        ctx.fillStyle = inst ? `rgba(244,244,245,${.65 * a})` : `rgba(250,250,250,${.18 * a})`;
+        ctx.strokeStyle = isFlash ? `rgba(34,197,94,${.9 * a})` : (isDone ? ink(.5 * a) : ink(.18 * a));
+        ctx.lineWidth = isFlash ? 2 : 1;
+        ctx.fillRect(ex + 1, miniROBY, robSlotW - 3, robSlotH);
+        ctx.strokeRect(ex + 1, miniROBY, robSlotW - 3, robSlotH);
+        if (isFlash) {
+          ctx.fillStyle = `rgba(34,197,94,${.18 * a})`;
+          ctx.fillRect(ex + 1, miniROBY, robSlotW - 3, robSlotH);
         }
-        const ratEW2 = Math.floor((panW - 10) / 8), ratRowY = rRobY + robEH2 + 14;
-        ctx.fillStyle = ink(.28 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'left';
-        ctx.fillText('Register Alias Table (8 regs)', px + 4, ratRowY - 3);
-        rat.forEach((tag, i) => {
-          const rx2 = px + 4 + i * ratEW2, fl = ratFlash.timer > 0 && ratFlash.tag === tag;
-          ctx.fillStyle = tag ? `rgba(24,24,27,${.07 * a})` : `rgba(250,250,250,${.2 * a})`;
-          ctx.strokeStyle = fl ? `rgba(34,197,94,${.8 * a})` : (tag ? ink(.22 * a) : ink(.09 * a));
-          ctx.lineWidth = fl ? 2 : 1;
-          ctx.fillRect(rx2, ratRowY, ratEW2 - 1, 30); ctx.strokeRect(rx2, ratRowY, ratEW2 - 1, 30);
-          if (fl) { ctx.fillStyle = `rgba(34,197,94,${.12 * a})`; ctx.fillRect(rx2, ratRowY, ratEW2 - 1, 30); }
-          ctx.fillStyle = ink(.35 * a); ctx.font = '7px Courier New'; ctx.textAlign = 'center';
-          ctx.fillText('r' + i, rx2 + ratEW2 / 2 - .5, ratRowY + 11);
-          ctx.fillStyle = tag ? ink(.6 * a) : ink(.16 * a);
-          ctx.fillText(tag || '—', rx2 + ratEW2 / 2 - .5, ratRowY + 24);
-        });
-        const rsUtil = Object.values(rsE).reduce((s, e) => s + e.length, 0);
-        const rsTot = Object.values(rsCap).reduce((s, v) => s + v, 0);
-        ctx.fillStyle = ink(.32 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
-        ctx.fillText('IPC ' + (2.6 + Math.sin(t * .018) * .35).toFixed(2) + '  ROB ' + rob.filter(r => r).length + '/12' + '  RS ' + rsUtil + '/' + rsTot + '  CDB ' + (cdb ? 'active' : 'idle'), px + 4, ratRowY + 44);
+        ctx.fillStyle = ink(.32 * a);
+        ctx.font = '6px Courier New';
+        ctx.textAlign = 'left';
+        ctx.fillText('T' + i, ex + 3, miniROBY + 7);
+        if (inst) {
+          ctx.fillStyle = inst.cl;
+          ctx.globalAlpha = .88 * a;
+          ctx.beginPath();
+          ctx.arc(ex + robSlotW / 2, miniROBY + 11, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = ink(.55 * a);
+          ctx.font = '7px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText(inst.op + (inst.dst > 0 ? ' r' + inst.dst : ''), ex + robSlotW / 2, miniROBY + 21);
+          ctx.fillStyle = isDone ? `rgba(21,128,61,${.85 * a})` : ink(.3 * a);
+          ctx.font = '7px Courier New';
+          ctx.fillText(isDone ? '✓' : '·', ex + robSlotW / 2, miniROBY + 28);
+        }
+        if (isHead) {
+          ctx.fillStyle = ink(.6 * a);
+          ctx.font = '8px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText('▲ head', ex + robSlotW / 2, miniROBY + robSlotH + 9);
+        }
       }
-    } else {
-      ctx.fillStyle = ink(.16 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
-      ctx.fillText('hover a block to expand', bX[0], dpY + 14);
     }
-    flows.forEach(f => {
-      const u = f.prog;
-      const fpx = bz(u, f.x0, f.cpx, f.x1), fpy = bz(u, f.y0, f.cpy, f.y1);
-      const fade = f.phase === 'commit' ? 1 - u : 1;
-      ctx.globalAlpha = .2 * fade * a; ctx.strokeStyle = f.cl; ctx.lineWidth = 2; ctx.beginPath();
-      for (let s = 0; s <= 6; s++) {
-        const tu = Math.max(0, u - .12) + (u - Math.max(0, u - .12)) * (s / 6);
-        const tx2 = bz(tu, f.x0, f.cpx, f.x1), ty2 = bz(tu, f.y0, f.cpy, f.y1);
-        s === 0 ? ctx.moveTo(tx2, ty2) : ctx.lineTo(tx2, ty2);
+
+    // ===== RAT strip =====
+    {
+      ctx.fillStyle = ink(.55 * a);
+      ctx.font = 'bold 8px Courier New';
+      ctx.textAlign = 'left';
+      ctx.fillText('RAT — arch reg → in-flight tag (eliminates WAR/WAW)', sx, ratY - 4);
+      const ratSlotW = wAvail / 8;
+      const ratH = 18;
+      for (let i = 0; i < 8; i++) {
+        const ex = sx + i * ratSlotW;
+        const tag = rat[i];
+        const isFlash = ratFlash.timer > 0 && ratFlash.tag === tag;
+        ctx.fillStyle = tag ? `rgba(244,244,245,${.65 * a})` : `rgba(250,250,250,${.18 * a})`;
+        ctx.strokeStyle = isFlash ? `rgba(34,197,94,${.9 * a})` : ink(.18 * a);
+        ctx.lineWidth = isFlash ? 2 : 1;
+        ctx.fillRect(ex + 1, ratY, ratSlotW - 3, ratH);
+        ctx.strokeRect(ex + 1, ratY, ratSlotW - 3, ratH);
+        ctx.fillStyle = ink(.45 * a);
+        ctx.font = '7px Courier New';
+        ctx.textAlign = 'left';
+        ctx.fillText('r' + i, ex + 4, ratY + 8);
+        ctx.fillStyle = tag ? ink(.75 * a) : ink(.25 * a);
+        ctx.font = 'bold 8px Courier New';
+        ctx.textAlign = 'right';
+        ctx.fillText(tag || '—', ex + ratSlotW - 5, ratY + 13);
       }
+    }
+
+    // ===== Gantt chart =====
+    {
+      ctx.fillStyle = ink(.55 * a);
+      ctx.font = 'bold 8px Courier New';
+      ctx.textAlign = 'left';
+      ctx.fillText('Pipeline timeline — out-of-order execution, in-order commit →', sx, ganttY - 4);
+      const cyclesShown = 18;
+      const labelW = 84;
+      const colW = (wAvail - labelW) / cyclesShown;
+      const rowH = 14;
+      const headerH = 13;
+      for (let c = 0; c < cyclesShown; c++) {
+        if (c % 3 === 0) {
+          const cycNum = cycle - cyclesShown + c + 1;
+          if (cycNum > 0) {
+            ctx.fillStyle = ink(.38 * a);
+            ctx.font = '7px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(cycNum), sx + labelW + c * colW + colW / 2, ganttY + headerH - 1);
+          }
+        }
+      }
+      const recentMap = new Map<number, GanttEntry>();
+      for (let i = robHead; i < robTail; i++) {
+        const inst = rob[i % 12];
+        if (!inst) continue;
+        recentMap.set(inst.seq, {
+          seq: inst.seq, op: inst.op, dst: inst.dst, src1: inst.src1, src2: inst.src2,
+          cl: inst.cl, cF: inst.cF, cI: inst.cI, cX: inst.cX, cW: inst.cW, cC: inst.cC,
+          speculative: inst.speculative, squashed: false,
+        });
+      }
+      for (let i = ganttHistory.length - 1; i >= 0 && recentMap.size < GANTT_ROWS + 6; i--) {
+        const g = ganttHistory[i];
+        if (!recentMap.has(g.seq)) recentMap.set(g.seq, g);
+      }
+      const allEntries = Array.from(recentMap.values()).sort((a2, b2) => a2.seq - b2.seq);
+      const rows = allEntries.slice(-GANTT_ROWS);
+      rows.forEach((entry, ri) => {
+        const ry = ganttY + headerH + ri * rowH;
+        ctx.fillStyle = entry.squashed ? `rgba(190,18,60,${.7 * a})` : ink(.6 * a);
+        ctx.font = '7px Courier New';
+        ctx.textAlign = 'right';
+        ctx.fillText(instLabel(entry, true), sx + labelW - 4, ry + rowH - 4);
+        const stages: { name: string; cyc: number; col: string }[] = [
+          { name: 'F', cyc: entry.cF, col: 'rgba(160,160,170,' },
+          { name: 'I', cyc: entry.cI, col: 'rgba(180,83,9,' },
+          { name: 'X', cyc: entry.cX, col: 'rgba(126,34,206,' },
+          { name: 'W', cyc: entry.cW, col: 'rgba(21,128,61,' },
+          { name: 'C', cyc: entry.cC, col: 'rgba(190,18,60,' },
+        ];
+        for (let c = 0; c < cyclesShown; c++) {
+          const cycNum = cycle - cyclesShown + c + 1;
+          let activeStage: { name: string; cyc: number; col: string } | null = null;
+          for (const s of stages) {
+            if (s.cyc >= 0 && s.cyc <= cycNum) activeStage = s;
+          }
+          if (!activeStage) continue;
+          const cxg = sx + labelW + c * colW;
+          const col = entry.squashed ? 'rgba(190,18,60,' : activeStage.col;
+          ctx.fillStyle = col + (.6 * a) + ')';
+          ctx.fillRect(cxg + 1, ry + 1, colW - 2, rowH - 3);
+          ctx.fillStyle = `rgba(255,255,255,${.95 * a})`;
+          ctx.font = 'bold 7px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText(activeStage.name, cxg + colW / 2, ry + rowH - 4);
+        }
+      });
+    }
+
+    // ===== CDB (upgraded with tag bubble) =====
+    if (cdb) {
+      const fromX = bX[2] + bW * 0.5;
+      const toX = bX[1] + bW * 0.5;
+      const arcY = boxesY - 26;
+      const u = cdb.prog;
+      ctx.strokeStyle = cdb.cl;
+      ctx.globalAlpha = .65 * a;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(fromX, boxesY);
+      ctx.quadraticCurveTo((fromX + toX) / 2, arcY, toX, boxesY);
       ctx.stroke();
-      ctx.globalAlpha = .9 * fade * a; ctx.fillStyle = f.cl;
-      ctx.beginPath(); ctx.arc(fpx, fpy, 6, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.93)'; ctx.font = 'bold 6px Courier New'; ctx.textAlign = 'center';
-      ctx.fillText(f.nm, fpx, fpy + 2);
-      if (f.phase === 'commit') {
-        ctx.globalAlpha = .35 * (1 - u) * a; ctx.strokeStyle = f.cl; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(fpx, fpy, 6 + u * 13, 0, Math.PI * 2); ctx.stroke();
-      }
       ctx.globalAlpha = 1;
+      const px = bz(u, fromX, (fromX + toX) / 2, toX);
+      const py = bz(u, boxesY, arcY, boxesY);
+      ctx.fillStyle = cdb.cl;
+      ctx.globalAlpha = .92 * a;
+      ctx.beginPath();
+      ctx.arc(px, py, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 7px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(cdb.tag, px, py + 2.5);
+      ctx.fillStyle = cdb.cl;
+      ctx.globalAlpha = .85 * a;
+      ctx.font = '8px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('CDB · ' + cdb.tag + ' = 0x' + cdb.value.toString(16).padStart(2, '0'), (fromX + toX) / 2, arcY - 4);
+      ctx.globalAlpha = 1;
+    }
+
+    // Wakeup pulse indicators on the RS box
+    wakeArrows.forEach(arr => {
+      const fade = Math.max(0, 1 - arr.age / 24);
+      const x = bX[1] + bW / 2 + ((arr.consumerSeq % 5) - 2) * 9;
+      ctx.strokeStyle = `rgba(34,197,94,${.65 * fade * a})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x, boxesY - 4);
+      ctx.lineTo(x, boxesY + 16);
+      ctx.stroke();
     });
+
+    // Squash flash overlay
+    if (squashTimer > 0) {
+      const fa = squashTimer / 28;
+      ctx.fillStyle = `rgba(190,18,60,${.10 * fa * a})`;
+      ctx.fillRect(sx, y0Top, wAvail, ganttY + 6 * 14 + 14 - y0Top);
+      ctx.fillStyle = `rgba(190,18,60,${.9 * fa * a})`;
+      ctx.font = 'bold 13px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚡ SQUASH — branch mispredict ⚡', sx + wAvail / 2, y0Top + 2);
+    }
   };
 })();
 
@@ -721,6 +1352,12 @@ const L3 = (() => {
   const fsmEdges: [number, number][] = [[0,1],[1,2],[2,3],[3,4],[4,0],[2,0]];
   return function draw(ctx: Ctx, W: number, H: number, a: number) {
     t++;
+    // Right-area wrap (avoids the section text card on the left).
+    ctx.save();
+    const _rightX = W * 0.42, _fitS = (W - _rightX) / W;
+    ctx.translate(Math.round(_rightX), Math.round((H - H * _fitS) / 2));
+    ctx.scale(_fitS, _fitS);
+
     const waveW = W * .52, waveX = W * .44, rh = 38, sy = H / 2 - (sigs.length * rh) / 2;
     const curState = Math.floor(t / 48) % fsmStates.length;
     sigs.forEach((s, i) => {
@@ -823,16 +1460,18 @@ const L3 = (() => {
     const pulse = Math.sin(t * .1) * .5 + .5;
     ctx.strokeStyle = ink(.3 * pulse * a); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(cx2, cy2, 22 + pulse * 4, 0, Math.PI * 2); ctx.stroke();
+
+    ctx.restore();
   };
 })();
 
-// ── L2: 4-bit Ripple Carry Adder ──
+// ── L2: 4-bit Carry-Lookahead Adder (gate-level) ──
 export let L2_A = 6, L2_B = 5, L2_A_locked = false;
 const L2 = (() => {
-  let t = 0, eTmr = 0, carryProg = 0;
+  let t = 0, eTmr = 0;
+  const CYCLE = 290;  // total animation cycle in frames (≈4.8s at 60fps)
   const examples = [[6,5],[3,7],[12,4],[9,6],[15,1],[8,7],[11,3]];
   let eIdx = 0;
-  function b4(n: number) { return [3, 2, 1, 0].map(i => (n >> i) & 1); }
   function gshape(ctx: Ctx, x: number, y: number, w: number, h: number, type: string, fill: string, stk: string) {
     ctx.fillStyle = fill; ctx.strokeStyle = stk; ctx.lineWidth = 1.2;
     if (type === 'AND') {
@@ -853,126 +1492,447 @@ const L2 = (() => {
     ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(([x, y]) => ctx.lineTo(x, y)); ctx.stroke();
   }
-  function dotc(ctx: Ctx, x: number, y: number, col: string) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 2.8, 0, Math.PI * 2); ctx.fill(); }
   return function draw(ctx: Ctx, W: number, H: number, a: number) {
     t++; eTmr++;
-    if (eTmr > 290 && !L2_A_locked) { eTmr = 0; eIdx = (eIdx + 1) % examples.length; carryProg = 0; }
-    carryProg = Math.min(1, carryProg + 0.007);
+    if (eTmr > CYCLE) {
+      if (L2_A_locked) {
+        // User has typed inputs — stay at the settled phase forever.
+        eTmr = CYCLE;
+      } else {
+        eTmr = 0;
+        eIdx = (eIdx + 1) % examples.length;
+      }
+    }
+
     const A = (L2_A_locked ? L2_A : examples[eIdx][0]) & 15;
     const B = (L2_A_locked ? L2_B : examples[eIdx][1]) & 15;
     const fullSum = A + B;
-    const aBits = b4(A), bBits = b4(B);
-    const cin = [0];
-    for (let i = 0; i < 4; i++) { const ai = (A >> i) & 1, bi = (B >> i) & 1, c = cin[i]; cin.push((ai & bi) | ((ai ^ bi) & c)); }
-    const gw = 32, gh = 18, cw = 210, ox = 220, oy = 72;
-    const totalW = 3 * ox + cw, sx = Math.max(12, (W - totalW) / 2), sy = H * .09;
-    ctx.fillStyle = ink(.2 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'left';
-    ctx.fillText('4-bit Ripple Carry Adder  —  gate-level schematic', sx, sy - 12);
+
+    // ── Per-bit propagate / generate (parallel: 1 gate delay) ──
+    const P: number[] = [], G: number[] = [];
     for (let i = 0; i < 4; i++) {
-      const bit = i, cx2 = sx + i * ox, cy2 = sy + i * oy;
-      const ai = (A >> bit) & 1, bi = (B >> bit) & 1, ci = cin[bit];
-      const si = (fullSum >> bit) & 1, co = cin[bit + 1];
-      const carryLit = bit === 0 || carryProg >= (bit - 1) * 0.28 + 0.30;
-      const wA = (v: number) => v ? `rgba(29,78,216,${.55 * a})` : `rgba(185,185,195,${.3 * a})`;
-      const wS = (v: number) => v ? `rgba(21,128,61,${.55 * a})` : `rgba(185,185,195,${.3 * a})`;
-      const wC = (v: number, lit: boolean) => v && lit ? `rgba(190,18,60,${.55 * a})` : `rgba(185,185,195,${.25 * a})`;
-      const s1 = ai ^ bi, G = ai & bi, P = s1 & ci, S = s1 ^ ci;
-      const bOn = `rgba(29,78,216,${.14 * a})`, bOff = `rgba(248,248,250,${.88 * a})`;
-      const bOnS = `rgba(29,78,216,${.45 * a})`, bOffS = ink(.18 * a);
-      const gOn = `rgba(21,128,61,${.14 * a})`, gOnS = `rgba(21,128,61,${.45 * a})`;
-      const rOn = `rgba(190,18,60,${.12 * a})`, rOnS = `rgba(190,18,60,${.4 * a})`;
-      const x1c = cx2 + 18, x2c = cx2 + 90, x3c = cx2 + 152;
-      const yX1 = cy2 + 9, yA1 = cy2 + 36, yX2 = cy2 + 9, yA2 = cy2 + 36, yOR = cy2 + 22;
-      gshape(ctx, x1c, yX1, gw, gh, 'XOR', s1 ? bOn : bOff, s1 ? bOnS : bOffS);
-      gshape(ctx, x1c, yA1, gw, gh, 'AND', G ? rOn : bOff, G ? rOnS : bOffS);
-      gshape(ctx, x2c, yX2, gw, gh, 'XOR', S ? gOn : bOff, S ? gOnS : bOffS);
-      gshape(ctx, x2c, yA2, gw, gh, 'AND', P ? rOn : bOff, P ? rOnS : bOffS);
-      gshape(ctx, x3c, yOR, gw, gh, 'OR', co && carryLit ? rOn : bOff, co && carryLit ? rOnS : bOffS);
-      ctx.fillStyle = ink(.26 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'center';
-      ctx.fillText('⊕', x1c + 16, yX1 + 12); ctx.fillText('·', x1c + 14, yA1 + 12);
-      ctx.fillText('⊕', x2c + 16, yX2 + 12); ctx.fillText('·', x2c + 14, yA2 + 12);
-      ctx.fillText('≥1', x3c + 15, yOR + 12);
-      wl(ctx, [[cx2, cy2 + 12], [cx2 + 12, cy2 + 12], [cx2 + 22, cy2 + 12]], wA(ai));
-      wl(ctx, [[cx2 + 12, cy2 + 12], [cx2 + 12, cy2 + 39], [cx2 + 18, cy2 + 39]], wA(ai));
-      dotc(ctx, cx2 + 12, cy2 + 12, wA(ai));
-      wl(ctx, [[cx2, cy2 + 24], [cx2 + 16, cy2 + 24], [cx2 + 22, cy2 + 24]], wA(bi));
-      wl(ctx, [[cx2 + 16, cy2 + 24], [cx2 + 16, cy2 + 51], [cx2 + 18, cy2 + 51]], wA(bi));
-      dotc(ctx, cx2 + 16, cy2 + 24, wA(bi));
-      wl(ctx, [[cx2 + 50, cy2 + 18], [cx2 + 62, cy2 + 18]], wA(s1));
-      wl(ctx, [[cx2 + 62, cy2 + 18], [cx2 + 62, cy2 + 12], [cx2 + 94, cy2 + 12]], wA(s1));
-      wl(ctx, [[cx2 + 62, cy2 + 18], [cx2 + 62, cy2 + 39], [cx2 + 90, cy2 + 39]], wA(s1));
-      dotc(ctx, cx2 + 62, cy2 + 18, wA(s1));
-      if (bit === 0) {
-        wl(ctx, [[cx2 - 20, cy2 + 68], [cx2, cy2 + 68]], wC(ci, carryLit));
-        ctx.fillStyle = ink(.22 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'right';
-        ctx.fillText('0', cx2 - 22, cy2 + 72);
-      }
-      wl(ctx, [[cx2, cy2 + 68], [cx2 + 82, cy2 + 68], [cx2 + 82, cy2 + 24]], wC(ci, carryLit));
-      wl(ctx, [[cx2 + 82, cy2 + 51], [cx2 + 90, cy2 + 51]], wC(ci, carryLit));
-      wl(ctx, [[cx2 + 82, cy2 + 24], [cx2 + 94, cy2 + 24]], wC(ci, carryLit));
-      dotc(ctx, cx2 + 82, cy2 + 51, wC(ci, carryLit));
-      wl(ctx, [[cx2 + 43, cy2 + 45], [cx2 + 72, cy2 + 45], [cx2 + 72, cy2 + 25], [cx2 + 152, cy2 + 25]], wC(G, true));
-      wl(ctx, [[cx2 + 115, cy2 + 45], [cx2 + 137, cy2 + 45], [cx2 + 137, cy2 + 37], [cx2 + 152, cy2 + 37]], wC(P, carryLit));
-      wl(ctx, [[cx2 + 122, cy2 + 18], [cx2 + cw, cy2 + 18]], wS(si));
-      wl(ctx, [[cx2 + 184, cy2 + 31], [cx2 + cw, cy2 + 31]], wC(co, carryLit));
-      if (bit < 3) {
-        const ncy2 = cy2 + oy;
-        wl(ctx, [[cx2 + cw, cy2 + 31], [cx2 + cw, ncy2 + 68], [cx2 + ox, ncy2 + 68]], wC(co, carryLit), 1.5);
-      } else if (co) {
-        wl(ctx, [[cx2 + cw, cy2 + 31], [cx2 + cw + 14, cy2 + 31]], wC(co, true), 1.5);
-        ctx.fillStyle = `rgba(190,18,60,${.65 * a})`; ctx.font = '8px Courier New'; ctx.textAlign = 'left';
-        ctx.fillText('Cout=1', cx2 + cw + 16, cy2 + 35);
-      }
-      ctx.font = '8px Courier New'; ctx.textAlign = 'right';
-      ctx.fillStyle = ai ? `rgba(29,78,216,${.65 * a})` : `rgba(150,150,150,${.35 * a})`;
-      ctx.fillText('A' + bit, cx2 - 2, cy2 + 16);
-      ctx.fillStyle = bi ? `rgba(29,78,216,${.65 * a})` : `rgba(150,150,150,${.35 * a})`;
-      ctx.fillText('B' + bit, cx2 - 2, cy2 + 28);
-      if (bit > 0) { ctx.fillStyle = wC(ci, carryLit); ctx.fillText('C' + bit, cx2 - 2, cy2 + 72); }
+      const ai = (A >> i) & 1, bi = (B >> i) & 1;
+      P.push(ai ^ bi);
+      G.push(ai & bi);
+    }
+    const C0 = 0;
+    // ── Lookahead: all carries computed in parallel from P, G, C₀ ──
+    const C1 = G[0] | (P[0] & C0);
+    const C2 = G[1] | (P[1] & G[0]) | (P[1] & P[0] & C0);
+    const C3 = G[2] | (P[2] & G[1]) | (P[2] & P[1] & G[0]) | (P[2] & P[1] & P[0] & C0);
+    const C4 = G[3] | (P[3] & G[2]) | (P[3] & P[2] & G[1]) | (P[3] & P[2] & P[1] & G[0]) | (P[3] & P[2] & P[1] & P[0] & C0);
+    const C = [C0, C1, C2, C3, C4];
+    const S = P.map((p, i) => p ^ C[i]);
+
+    // ── Phase machine ──
+    // 0: inputs · 1: P,G · 2: fan-in · 3: products · 4: carries · 5: sum · 6: hold
+    let phase = 0;
+    if (eTmr < 18) phase = 0;
+    else if (eTmr < 54) phase = 1;
+    else if (eTmr < 84) phase = 2;
+    else if (eTmr < 120) phase = 3;
+    else if (eTmr < 150) phase = 4;
+    else if (eTmr < 180) phase = 5;
+    else phase = 6;
+    const inputLit = phase >= 0;
+    const pgLit = phase >= 1;
+    const flowLit = phase >= 2;
+    const prodLit = phase >= 3;
+    const carryLit = phase >= 4;
+    const sumLit = phase >= 5;
+
+    // ── Layout (canvas-local, before fit-scale) ──
+    const PG_W = 78, PG_H = 60;
+    const SUM_W = 60, SUM_H = 40;
+    const ROW_H = 72;
+    const PG_X = 0;
+    const BLOCK_X = 104;
+    const BLOCK_W = 240;
+    const BLOCK_H = 4 * ROW_H;
+    const SUM_X = 372;
+    const NATURAL_W = 522;
+    const NATURAL_H = 5 * ROW_H + 70;
+    // Per-signal vertical bus positions inside the left edge of the block.
+    // Spaced out for readability — each bus is clearly distinguishable.
+    const busDx = 5;
+    const busBase = BLOCK_X + 6;
+    const sigX: Record<string, number> = {
+      C0: busBase + 0 * busDx,
+      P0: busBase + 1 * busDx,
+      G0: busBase + 2 * busDx,
+      P1: busBase + 3 * busDx,
+      G1: busBase + 4 * busDx,
+      P2: busBase + 5 * busDx,
+      G2: busBase + 6 * busDx,
+      P3: busBase + 7 * busDx,
+      G3: busBase + 8 * busDx,
+    };
+
+    const rightAreaX = W * 0.42;
+    const rightAreaW = W - rightAreaX - 10;
+    const fitScale = Math.min(1, rightAreaW / NATURAL_W, (H * 0.86) / NATURAL_H);
+    // Round translate origin to integer pixels — sub-pixel translates blur text/lines.
+    const fitTx = Math.round(rightAreaX + (rightAreaW - NATURAL_W * fitScale) / 2);
+    const fitTy = Math.round((H - NATURAL_H * fitScale) / 2);
+    ctx.save();
+    ctx.translate(fitTx, fitTy);
+    ctx.scale(fitScale, fitScale);
+
+    const sx = 0, sy = 28;
+    const blockTop = sy + ROW_H;  // block starts at bit 1's row (bit 0 has no carry input from lookahead)
+
+    // ── Title + phase label ──
+    ctx.fillStyle = ink(.5 * a);
+    ctx.font = 'bold 11px Courier New';
+    ctx.textAlign = 'left';
+    ctx.fillText('4-bit Carry-Lookahead Adder · all carries in parallel', sx, sy - 12);
+    const PHASE_LABELS = ['inputs', 'P,G — parallel', 'fan-in →', 'product terms', 'carries — parallel', 'sum — parallel', 'settled'];
+    ctx.fillStyle = ink(.4 * a);
+    ctx.font = '9px Courier New';
+    ctx.textAlign = 'right';
+    ctx.fillText('phase: ' + PHASE_LABELS[phase], sx + NATURAL_W, sy - 12);
+
+    // ── PG cells (left column, 4 stacked, bit 0 at top) ──
+    for (let i = 0; i < 4; i++) {
+      const cellY = sy + i * ROW_H;
+      const ai = (A >> i) & 1, bi = (B >> i) & 1;
+      ctx.fillStyle = `rgba(252,252,253,${.72 * a})`;
+      ctx.strokeStyle = ink(.22 * a);
+      ctx.lineWidth = 1;
+      ctx.fillRect(PG_X, cellY, PG_W, PG_H);
+      ctx.strokeRect(PG_X, cellY, PG_W, PG_H);
+      ctx.fillStyle = ink(.55 * a);
+      ctx.font = 'bold 8px Courier New';
       ctx.textAlign = 'left';
-      ctx.fillStyle = si ? `rgba(21,128,61,${.65 * a})` : `rgba(150,150,150,${.32 * a})`;
-      ctx.fillText('S' + bit + '=' + si, cx2 + cw + 2, cy2 + 22);
+      ctx.fillText('bit ' + i, PG_X + 4, cellY + 10);
+      const aCol = ai && inputLit ? `rgba(29,78,216,${a})` : ink(.55 * a);
+      const bCol = bi && inputLit ? `rgba(29,78,216,${a})` : ink(.55 * a);
+      ctx.fillStyle = aCol;
+      ctx.font = '9px Courier New';
+      ctx.fillText('A' + i + '=' + ai, PG_X + 6, cellY + 26);
+      ctx.fillStyle = bCol;
+      ctx.fillText('B' + i + '=' + bi, PG_X + 6, cellY + 40);
+      // XOR (P) gate
+      const pgGateX = PG_X + 38;
+      gshape(ctx, pgGateX, cellY + 18, 18, 12, 'XOR',
+        P[i] && pgLit ? `rgba(29,78,216,${.5 * a})` : `rgba(255,255,255,${.95 * a})`,
+        P[i] && pgLit ? `rgba(29,78,216,${a})` : ink(.5 * a));
+      // AND (G) gate
+      gshape(ctx, pgGateX, cellY + 36, 18, 12, 'AND',
+        G[i] && pgLit ? `rgba(190,18,60,${.5 * a})` : `rgba(255,255,255,${.95 * a})`,
+        G[i] && pgLit ? `rgba(190,18,60,${a})` : ink(.5 * a));
+      // ── A_i and B_i input wires: each branches to BOTH the XOR and the AND ──
+      // A_i wire (top input of XOR + top input of AND).
+      const aJx = pgGateX - 6, aWY = cellY + 23;
+      wl(ctx, [[PG_X + 28, aWY], [aJx, aWY]], aCol, 1);
+      wl(ctx, [[aJx, aWY], [aJx, cellY + 21], [pgGateX + 3, cellY + 21]], aCol, 1);     // → XOR top input
+      wl(ctx, [[aJx, aWY], [aJx, cellY + 39], [pgGateX + 1, cellY + 39]], aCol, 1);     // → AND top input
+      ctx.fillStyle = aCol;
+      ctx.beginPath(); ctx.arc(aJx, aWY, 1.5, 0, Math.PI * 2); ctx.fill();
+      // B_i wire (bottom input of XOR + bottom input of AND).
+      const bJx = pgGateX - 3, bWY = cellY + 37;
+      wl(ctx, [[PG_X + 28, bWY], [bJx, bWY]], bCol, 1);
+      wl(ctx, [[bJx, bWY], [bJx, cellY + 27], [pgGateX + 3, cellY + 27]], bCol, 1);     // → XOR bottom input
+      wl(ctx, [[bJx, bWY], [bJx, cellY + 45], [pgGateX + 1, cellY + 45]], bCol, 1);     // → AND bottom input
+      ctx.fillStyle = bCol;
+      ctx.beginPath(); ctx.arc(bJx, bWY, 1.5, 0, Math.PI * 2); ctx.fill();
+      // P, G output labels
+      ctx.fillStyle = P[i] && pgLit ? `rgba(29,78,216,${.9 * a})` : ink(.4 * a);
+      ctx.font = 'bold 9px Courier New';
+      ctx.textAlign = 'right';
+      ctx.fillText('P' + i + '=' + P[i], PG_X + PG_W - 4, cellY + 26);
+      ctx.fillStyle = G[i] && pgLit ? `rgba(190,18,60,${.9 * a})` : ink(.4 * a);
+      ctx.fillText('G' + i + '=' + G[i], PG_X + PG_W - 4, cellY + 44);
     }
-    const L1c = cw - 184, L2c = oy + 37, L3c = ox - cw, Ltot = L1c + L2c + L3c;
-    for (let i = 0; i < 3; i++) {
-      const co = cin[i + 1]; if (!co) continue;
-      const cx2 = sx + i * ox, cy2 = sy + i * oy, ncy2 = cy2 + oy;
-      const pStart = i * 0.28 + 0.12, pEnd = i * 0.28 + 0.30;
-      const pulseT = Math.max(0, Math.min(1.4, (carryProg - pStart) / (pEnd - pStart)));
-      if (pulseT <= 0) continue;
-      const d = Math.min(pulseT, 1) * Ltot;
-      let px: number, py: number;
-      if (d <= L1c) { px = cx2 + 184 + d; py = cy2 + 31; }
-      else if (d <= L1c + L2c) { px = cx2 + cw; py = cy2 + 31 + (d - L1c); }
-      else { px = cx2 + cw + (d - L1c - L2c); py = ncy2 + 68; }
-      const fade = pulseT <= 1 ? 1 : Math.max(0, 1 - (pulseT - 1) / 0.4);
-      for (let j = 1; j <= 5; j++) {
-        const td = d - j * 6; if (td < 0) continue;
-        let tx: number, ty: number;
-        if (td <= L1c) { tx = cx2 + 184 + td; ty = cy2 + 31; }
-        else if (td <= L1c + L2c) { tx = cx2 + cw; ty = cy2 + 31 + (td - L1c); }
-        else { tx = cx2 + cw + (td - L1c - L2c); ty = ncy2 + 68; }
-        ctx.fillStyle = `rgba(200,30,60,${(1 - j / 6) * 0.38 * fade * a})`;
-        ctx.beginPath(); ctx.arc(tx, ty, Math.max(0, 2.8 - j * 0.35), 0, Math.PI * 2); ctx.fill();
+
+    // ── Block rows definition (used for both bus extents and row rendering) ──
+    type ProductDef = { label: string; value: number; signals: string[] };
+    const blockRows: { products: ProductDef[]; g: number; gLabel: string; gSig: string; result: number; cLabel: string }[] = [
+      { products: [{ label: 'P₀·C₀', value: P[0] & C0, signals: ['P0', 'C0'] }],
+        g: G[0], gLabel: 'G₀', gSig: 'G0', result: C1, cLabel: 'C₁' },
+      { products: [
+          { label: 'P₁·G₀',     value: P[1] & G[0],         signals: ['P1', 'G0'] },
+          { label: 'P₁·P₀·C₀',  value: P[1] & P[0] & C0,    signals: ['P1', 'P0', 'C0'] },
+        ],
+        g: G[1], gLabel: 'G₁', gSig: 'G1', result: C2, cLabel: 'C₂' },
+      { products: [
+          { label: 'P₂·G₁',        value: P[2] & G[1],                 signals: ['P2', 'G1'] },
+          { label: 'P₂·P₁·G₀',     value: P[2] & P[1] & G[0],          signals: ['P2', 'P1', 'G0'] },
+          { label: 'P₂·P₁·P₀·C₀',  value: P[2] & P[1] & P[0] & C0,     signals: ['P2', 'P1', 'P0', 'C0'] },
+        ],
+        g: G[2], gLabel: 'G₂', gSig: 'G2', result: C3, cLabel: 'C₃' },
+      { products: [
+          { label: 'P₃·G₂',           value: P[3] & G[2],                         signals: ['P3', 'G2'] },
+          { label: 'P₃·P₂·G₁',        value: P[3] & P[2] & G[1],                  signals: ['P3', 'P2', 'G1'] },
+          { label: 'P₃·P₂·P₁·G₀',     value: P[3] & P[2] & P[1] & G[0],           signals: ['P3', 'P2', 'P1', 'G0'] },
+          { label: 'P₃·P₂·P₁·P₀·C₀',  value: P[3] & P[2] & P[1] & P[0] & C0,      signals: ['P3', 'P2', 'P1', 'P0', 'C0'] },
+        ],
+        g: G[3], gLabel: 'G₃', gSig: 'G3', result: C4, cLabel: 'Cout' },
+    ];
+
+    // ── Compute the deepest y where each signal is consumed ──
+    // Buses terminate just past their last tap so they don't dangle into empty space.
+    const blockBottom = blockTop + BLOCK_H;
+    const deepestY: Record<string, number> = {
+      C0: blockTop, P0: blockTop, G0: blockTop, P1: blockTop, G1: blockTop,
+      P2: blockTop, G2: blockTop, P3: blockTop, G3: blockTop,
+    };
+    for (let r = 0; r < 4; r++) {
+      const rwy = blockTop + r * ROW_H;
+      const aTop = rwy + 6;
+      const np = blockRows[r].products.length;
+      for (let k = 0; k < np; k++) {
+        const aY = aTop + k * 13;
+        const sigs = blockRows[r].products[k].signals;
+        const inSp = (11 - 2) / Math.max(1, sigs.length - 1);
+        sigs.forEach((s, si) => {
+          const inY = sigs.length === 1 ? aY + 11 / 2 : aY + 1 + si * inSp;
+          if (inY > deepestY[s]) deepestY[s] = inY;
+        });
       }
-      const gr = ctx.createRadialGradient(px, py, 0, px, py, 11);
-      gr.addColorStop(0, `rgba(255,110,150,${0.92 * fade * a})`);
-      gr.addColorStop(0.35, `rgba(230,40,75,${0.55 * fade * a})`);
-      gr.addColorStop(1, `rgba(190,18,60,0)`);
-      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(px, py, 11, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = `rgba(255,235,240,${0.95 * fade * a})`; ctx.beginPath(); ctx.arc(px, py, 2.8, 0, Math.PI * 2); ctx.fill();
-      if (pulseT > 0.78) {
-        const at = Math.min(1, (pulseT - 0.78) / 0.62);
-        ctx.strokeStyle = `rgba(220,40,70,${Math.max(0, (1 - at) * 0.7 * a)})`; ctx.lineWidth = 1.8;
-        ctx.beginPath(); ctx.arc(cx2 + ox, ncy2 + 68, at * 20, 0, Math.PI * 2); ctx.stroke();
+      const gwY = aTop + np * 13 + 6;
+      const gs = blockRows[r].gSig;
+      if (gwY > deepestY[gs]) deepestY[gs] = gwY;
+    }
+    // Pad each bus by 4px below its last tap for visual breathing room.
+    Object.keys(deepestY).forEach(s => { deepestY[s] = Math.min(deepestY[s] + 4, blockBottom); });
+
+    // ── Fan-in wires + per-signal buses ──
+    // Each P_i and G_i: horizontal from PG cell to its bus column, then a
+    // VERTICAL bus extending down only as far as its last consumer.
+    for (let i = 0; i < 4; i++) {
+      const cellY = sy + i * ROW_H;
+      const py = cellY + 22, gy = cellY + 40;
+      const pCol = P[i] && flowLit ? `rgba(29,78,216,${a})` : ink(.55 * a);
+      const gCol = G[i] && flowLit ? `rgba(190,18,60,${a})` : ink(.55 * a);
+      const pBus = sigX['P' + i], gBus = sigX['G' + i];
+      wl(ctx, [[PG_X + PG_W, py], [pBus, py]], pCol, 1.3);
+      wl(ctx, [[PG_X + PG_W, gy], [gBus, gy]], gCol, 1.3);
+      wl(ctx, [[pBus, py], [pBus, deepestY['P' + i]]], pCol, 1.2);
+      wl(ctx, [[gBus, gy], [gBus, deepestY['G' + i]]], gCol, 1.2);
+      ctx.fillStyle = pCol;
+      ctx.beginPath(); ctx.arc(pBus, py, 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = gCol;
+      ctx.beginPath(); ctx.arc(gBus, gy, 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = pCol;
+      ctx.font = '6px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('P' + i, pBus, py - 4);
+      ctx.fillStyle = gCol;
+      ctx.fillText('G' + i, gBus, gy - 4);
+    }
+    // C0 bus — terminates at its last tap too.
+    {
+      const c0Col = ink(.32 * a);
+      wl(ctx, [[sigX.C0, blockTop], [sigX.C0, deepestY.C0]], c0Col, 1.2);
+      ctx.fillStyle = ink(.5 * a);
+      ctx.font = 'bold 6px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('C₀=0', sigX.C0, blockTop - 4);
+    }
+
+    // ── Lookahead block ──
+    // Tinted block fill + stronger border so the lookahead region clearly stands out.
+    ctx.fillStyle = `rgba(244,247,252,${.85 * a})`;
+    ctx.strokeStyle = ink(.45 * a);
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(BLOCK_X, blockTop, BLOCK_W, BLOCK_H);
+    ctx.strokeRect(BLOCK_X, blockTop, BLOCK_W, BLOCK_H);
+    ctx.fillStyle = ink(.6 * a);
+    ctx.font = 'bold 9px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText('LOOKAHEAD BLOCK', BLOCK_X + BLOCK_W / 2, blockTop - 6);
+
+    for (let r = 0; r < 4; r++) {
+      const row = blockRows[r];
+      const rowY = blockTop + r * ROW_H;
+      const orX = BLOCK_X + BLOCK_W - 30;
+      const andW = 22, andH = 11, andX = BLOCK_X + 58;
+      const numP = row.products.length;
+      const andSp = 13;
+      const andTop = rowY + 6;
+
+      // Signal value lookup for tap colors.
+      const sigValue = (s: string): number => {
+        if (s === 'C0') return C0;
+        if (s[0] === 'P') return P[parseInt(s[1])];
+        return G[parseInt(s[1])];
+      };
+      const sigColor = (s: string, lit: boolean): string => {
+        const v = sigValue(s);
+        if (s[0] === 'P') return v && lit ? `rgba(29,78,216,${a})` : ink(.55 * a);
+        if (s[0] === 'G') return v && lit ? `rgba(190,18,60,${a})` : ink(.55 * a);
+        return ink(.55 * a);  // C0
+
+      };
+
+      // OR gate height grows with input count so each input line has clear space.
+      // Use ≥4 px between inputs. Center the OR vertically at rowY+33 so the
+      // carry-out (orY+orH/2) stays at rowY+33 regardless of size.
+      const numInputs = numP + 1;
+      const minSpacing = 4;
+      const orH = Math.max(14, (numInputs - 1) * minSpacing + 8);
+      const orY = rowY + 33 - orH / 2;
+      const orInYs: number[] = [];
+      const span = orH - 6;
+      const step = numInputs === 1 ? 0 : span / (numInputs - 1);
+      for (let k = 0; k < numInputs; k++) {
+        orInYs.push(orY + 3 + k * step);
+      }
+
+      for (let k = 0; k < numP; k++) {
+        const andY = andTop + k * andSp;
+        const v = row.products[k].value;
+        const sigs = row.products[k].signals;
+        gshape(ctx, andX, andY, andW, andH, 'AND',
+          v && prodLit ? `rgba(126,34,206,${.55 * a})` : `rgba(255,255,255,${.95 * a})`,
+          v && prodLit ? `rgba(126,34,206,${a})` : ink(.5 * a));
+        // Input stubs (bus → AND): one horizontal per signal, drawn on top of the AND.
+        const inSpacing = (andH - 2) / Math.max(1, sigs.length - 1);
+        sigs.forEach((s, si) => {
+          const busXVal = sigX[s];
+          const inY = sigs.length === 1 ? andY + andH / 2 : andY + 1 + si * inSpacing;
+          const col = sigColor(s, prodLit || flowLit);
+          wl(ctx, [[busXVal, inY], [andX + 1, inY]], col, 1.1);
+          if (sigValue(s) && (prodLit || flowLit)) {
+            ctx.fillStyle = col;
+            ctx.beginPath();
+            ctx.arc(busXVal, inY, 1.6, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+        ctx.fillStyle = v && prodLit ? `rgba(126,34,206,${a})` : ink(.6 * a);
+        ctx.font = 'bold 8px Courier New';
+        ctx.textAlign = 'left';
+        ctx.fillText(row.products[k].label, Math.round(andX + andW + 4), Math.round(andY + 9));
+        // AND → OR: Manhattan-routed (horizontal + vertical only).
+        // Each AND uses its own bend-x so verticals don't overlap, then each
+        // enters the OR at its own unique y slot on the left side.
+        const wireCol = v && prodLit ? `rgba(126,34,206,${a})` : ink(.5 * a);
+        const bendX = orX - 6 - k * 4;  // staggered so verticals are distinct
+        wl(ctx, [
+          [andX + andW, andY + andH / 2],
+          [bendX, andY + andH / 2],
+          [bendX, orInYs[k]],
+          [orX + 3, orInYs[k]],
+        ], wireCol, 1.1);
+      }
+
+      // G_n direct input to OR — Manhattan-routed, own bend-x and own slot.
+      const gActive = row.g && flowLit;
+      const gWireY = andTop + numP * andSp + 6;
+      ctx.fillStyle = gActive ? `rgba(190,18,60,${.88 * a})` : ink(.45 * a);
+      ctx.font = 'bold 8px Courier New';
+      ctx.textAlign = 'left';
+      ctx.fillText(row.gLabel, Math.round(sigX[row.gSig] + 4), Math.round(gWireY - 2));
+      const gWireCol = gActive ? `rgba(190,18,60,${a})` : ink(.5 * a);
+      const gBendX = orX - 6 - numP * 4;
+      wl(ctx, [
+        [sigX[row.gSig], gWireY],
+        [gBendX, gWireY],
+        [gBendX, orInYs[numInputs - 1]],
+        [orX + 3, orInYs[numInputs - 1]],
+      ], gWireCol, 1.1);
+
+      // OR gate
+      gshape(ctx, orX, orY, 22, orH, 'OR',
+        row.result && carryLit ? `rgba(190,18,60,${.55 * a})` : `rgba(255,255,255,${.95 * a})`,
+        row.result && carryLit ? `rgba(190,18,60,${a})` : ink(.5 * a));
+    }
+
+    // ── Sum cells (right column, 4 stacked) ──
+    // Each XOR has TWO inputs entering from the LEFT: P_i (top) and C_i (bottom).
+    for (let i = 0; i < 4; i++) {
+      const cellY = sy + i * ROW_H + 10;
+      ctx.fillStyle = `rgba(252,252,253,${.72 * a})`;
+      ctx.strokeStyle = ink(.22 * a);
+      ctx.lineWidth = 1;
+      ctx.fillRect(SUM_X, cellY, SUM_W, SUM_H);
+      ctx.strokeRect(SUM_X, cellY, SUM_W, SUM_H);
+      ctx.fillStyle = ink(.5 * a);
+      ctx.font = 'bold 8px Courier New';
+      ctx.textAlign = 'left';
+      ctx.fillText('S' + i, SUM_X + 4, cellY + 10);
+      const xorX = SUM_X + 18, xorY = cellY + 14;
+      gshape(ctx, xorX, xorY, 18, 12, 'XOR',
+        S[i] && sumLit ? `rgba(21,128,61,${.55 * a})` : `rgba(255,255,255,${.95 * a})`,
+        S[i] && sumLit ? `rgba(21,128,61,${a})` : ink(.5 * a));
+      ctx.fillStyle = S[i] && sumLit ? `rgba(21,128,61,${a})` : ink(.6 * a);
+      ctx.font = 'bold 11px Courier New';
+      ctx.textAlign = 'left';
+      ctx.fillText('=' + S[i], SUM_X + 40, cellY + 24);
+
+      // P_i input — short horizontal stub entering the XOR's TOP input from the LEFT.
+      const pInY = xorY + 3;
+      const pCol = P[i] && pgLit ? `rgba(29,78,216,${a})` : ink(.55 * a);
+      wl(ctx, [[SUM_X - 14, pInY], [xorX + 3, pInY]], pCol, 1.1);
+      ctx.fillStyle = pCol;
+      ctx.font = 'bold 8px Courier New';
+      ctx.textAlign = 'right';
+      ctx.fillText('P' + i + '=' + P[i], SUM_X - 2, Math.round(pInY + 3));
+    }
+
+    // ── Block carry outputs → Sum cells (C₁→Sum1, C₂→Sum2, C₃→Sum3, C₄=Cout) ──
+    // Start each carry wire at the OR gate's right tip (touching the gate).
+    for (let r = 0; r < 4; r++) {
+      const row = blockRows[r];
+      const orOutY = blockTop + r * ROW_H + 33;
+      const orTipX = BLOCK_X + BLOCK_W - 30 + 22;   // orX + orW
+      const carryOutX = BLOCK_X + BLOCK_W;
+      const carryCol = row.result && carryLit ? `rgba(190,18,60,${a})` : ink(.5 * a);
+      if (r < 3) {
+        const sumI = r + 1;
+        const sumCellY = sy + sumI * ROW_H + 10;
+        const xorBotInY = sumCellY + 14 + 9;
+        wl(ctx, [
+          [orTipX, orOutY],
+          [carryOutX + 14, orOutY],
+          [carryOutX + 14, xorBotInY],
+          [SUM_X + 18 + 3, xorBotInY],
+        ], carryCol, 1.5);
+        // Carry label sits OUTSIDE the Sum cell on the left, at the C input y —
+        // mirrors the P label placement so they stack neatly without overlap.
+        ctx.fillStyle = carryCol;
+        ctx.font = 'bold 8px Courier New';
+        ctx.textAlign = 'right';
+        ctx.fillText(row.cLabel + '=' + row.result, SUM_X - 2, Math.round(xorBotInY + 3));
+      } else {
+        // C₄ = Cout — extends past the block with overflow label.
+        wl(ctx, [[orTipX, orOutY], [carryOutX + 38, orOutY]], carryCol, 1.7);
+        ctx.fillStyle = carryCol;
+        ctx.font = 'bold 9px Courier New';
+        ctx.textAlign = 'left';
+        ctx.fillText('Cout=' + C4, carryOutX + 42, orOutY + 3);
       }
     }
-    const ry = sy + 3 * oy + 90;
-    ctx.fillStyle = `rgba(240,240,242,${.6 * a})`; ctx.strokeStyle = ink(.12 * a); ctx.lineWidth = 1;
-    ctx.fillRect(sx, ry, totalW, 24); ctx.strokeRect(sx, ry, totalW, 24);
-    ctx.fillStyle = ink(.46 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'center';
+
+    // C₀ = 0 stub into Sum 0's XOR bottom input (Sum 0 has no carry from the block).
+    {
+      const cellY0 = sy + 10;
+      const xorBotInY = cellY0 + 14 + 9;
+      ctx.fillStyle = ink(.55 * a);
+      ctx.font = 'bold 8px Courier New';
+      ctx.textAlign = 'right';
+      ctx.fillText('C₀=0', SUM_X - 2, Math.round(xorBotInY + 3));
+      wl(ctx, [[SUM_X - 14, xorBotInY], [SUM_X + 18 + 5, xorBotInY]], ink(.32 * a), 1.1);
+    }
+
+    // ── Bottom sum bar (below the lookahead block) ──
+    const ry = blockTop + BLOCK_H + 18;
+    ctx.fillStyle = `rgba(240,240,242,${.65 * a})`;
+    ctx.strokeStyle = ink(.16 * a);
+    ctx.lineWidth = 1;
+    ctx.fillRect(sx, ry, NATURAL_W, 24);
+    ctx.strokeRect(sx, ry, NATURAL_W, 24);
+    ctx.fillStyle = ink(.55 * a);
+    ctx.font = '10px Courier New';
+    ctx.textAlign = 'center';
     const sumBin = (fullSum >>> 0).toString(2).padStart(5, '0');
-    ctx.fillText(A + ' + ' + B + ' = ' + fullSum + '  ·  ' + aBits.join('') + ' + ' + bBits.join('') + ' = ' + sumBin, sx + totalW / 2, ry + 16);
+    const aBitStr = [3, 2, 1, 0].map(j => (A >> j) & 1).join('');
+    const bBitStr = [3, 2, 1, 0].map(j => (B >> j) & 1).join('');
+    ctx.fillText(A + ' + ' + B + ' = ' + fullSum + '  ·  ' + aBitStr + ' + ' + bBitStr + ' = ' + sumBin, sx + NATURAL_W / 2, ry + 16);
+
+    ctx.restore();
   };
 })();
 
@@ -981,6 +1941,13 @@ const L1 = (() => {
   let t = 0;
   return function draw(ctx: Ctx, W: number, H: number, a: number) {
     t++;
+    // Right-area wrap: shift + scale content to live in the right portion of the canvas
+    // so the section text card (on the left) doesn't cover it.
+    ctx.save();
+    const _rightX = W * 0.42, _fitS = (W - _rightX) / W;
+    ctx.translate(Math.round(_rightX), Math.round((H - H * _fitS) / 2));
+    ctx.scale(_fitS, _fitS);
+
     const Vgs = 0.7 + 0.8 * (Math.sin(t * .02) * .5 + .5);
     const Vth = 1.1, on = Vgs > Vth, chan = on ? (Vgs - Vth) / .7 : 0;
     const cx2 = W * .42, cy = H / 2, sw = 250, sh = 155, sx = cx2 - sw / 2, sy = cy - sh / 2;
@@ -1066,23 +2033,539 @@ const L1 = (() => {
     ctx.fillStyle = `rgba(126,34,206,${.55 * a})`; ctx.fillText('Ev', bx + bw - 4, by + bh * .65 - 3);
     ctx.fillStyle = `rgba(180,83,9,${.5 * a})`; ctx.fillText('Ef', bx + bw - 4, by + bh * .45 - 3);
     if (on) { ctx.fillStyle = `rgba(40,120,210,${.4 * a})`; ctx.font = '8px Courier New'; ctx.textAlign = 'center'; ctx.fillText('inversion', bx + bw / 2, by + bh * .32); }
+
+    // ── Id-Vgs sweep curve (compact overlay under the MOSFET) ──
+    const ivX = sx, ivY = sy + sh + 28, ivW = sw, ivH = 76;
+    ctx.fillStyle = `rgba(248,248,250,${.85 * a})`; ctx.strokeStyle = ink(.12 * a); ctx.lineWidth = 1;
+    ctx.fillRect(ivX, ivY, ivW, ivH); ctx.strokeRect(ivX, ivY, ivW, ivH);
+    ctx.fillStyle = ink(.32 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
+    ctx.fillText('Id vs Vgs', ivX + 6, ivY + 11);
+    ctx.fillStyle = ink(.22 * a); ctx.textAlign = 'right';
+    ctx.fillText('Vth=' + Vth + 'V', ivX + ivW - 6, ivY + 11);
+    // Axis tick marks (Vgs 0..2V on x, Id 0..max on y)
+    const padL = 22, padR = 10, padT = 18, padB = 14;
+    const plotX = ivX + padL, plotY = ivY + padT;
+    const plotW = ivW - padL - padR, plotH = ivH - padT - padB;
+    // Threshold line
+    const vthX = plotX + (Vth / 2) * plotW;
+    ctx.strokeStyle = `rgba(190,18,60,${.3 * a})`; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(vthX, plotY); ctx.lineTo(vthX, plotY + plotH); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = `rgba(190,18,60,${.45 * a})`; ctx.font = '7px Courier New'; ctx.textAlign = 'center';
+    ctx.fillText('Vth', vthX, plotY - 3);
+    // Id curve (square law beyond Vth, ~0 below).
+    const idAt = (vgs: number) => { const ov = Math.max(0, vgs - Vth); return ov * ov * .9; };
+    const maxId = idAt(2);
+    ctx.strokeStyle = `rgba(29,78,216,${.7 * a})`; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (let px = 0; px <= plotW; px++) {
+      const vgs = (px / plotW) * 2;
+      const id = idAt(vgs);
+      const py = plotY + plotH - (id / maxId) * plotH;
+      px === 0 ? ctx.moveTo(plotX, py) : ctx.lineTo(plotX + px, py);
+    }
+    ctx.stroke();
+    // Axis labels
+    ctx.fillStyle = ink(.3 * a); ctx.font = '7px Courier New'; ctx.textAlign = 'right';
+    ctx.fillText('Id', plotX - 3, plotY + 6);
+    ctx.textAlign = 'center';
+    ctx.fillText('Vgs', plotX + plotW / 2, plotY + plotH + 11);
+    // Live marker at current Vgs.
+    const markX = plotX + (Vgs / 2) * plotW;
+    const markY = plotY + plotH - (idAt(Vgs) / maxId) * plotH;
+    ctx.strokeStyle = `rgba(29,78,216,${.25 * a})`; ctx.lineWidth = 1; ctx.setLineDash([1, 2]);
+    ctx.beginPath(); ctx.moveTo(markX, plotY + plotH); ctx.lineTo(markX, markY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(plotX, markY); ctx.lineTo(markX, markY); ctx.stroke();
+    ctx.setLineDash([]);
+    // Marker glow
+    const gr2 = ctx.createRadialGradient(markX, markY, 0, markX, markY, 9);
+    gr2.addColorStop(0, `rgba(29,78,216,${.85 * a})`);
+    gr2.addColorStop(.5, `rgba(29,78,216,${.25 * a})`);
+    gr2.addColorStop(1, 'rgba(29,78,216,0)');
+    ctx.fillStyle = gr2; ctx.beginPath(); ctx.arc(markX, markY, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgba(29,78,216,${.95 * a})`;
+    ctx.beginPath(); ctx.arc(markX, markY, 2.5, 0, Math.PI * 2); ctx.fill();
+    // Current readout
+    ctx.fillStyle = ink(.45 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
+    ctx.fillText('Id=' + idAt(Vgs).toFixed(2) + 'mA', markX + 6, markY - 4);
+
+    ctx.restore();
   };
 })();
 
 // ── HERO_BG ──
+// Desktop scene: wallpaper, menu bar, dock, windows, scattered desktop icons,
+// and a prominent focal folder that grows with scroll — the "zoom into the machine" target.
+let heroScroll = 0;
+export function setHeroScroll(v: number) { heroScroll = v; }
+
+// Hero icon hotspots — populated by HERO_BG init, queried by StackClient.
+export type HeroHotspot = { idx: number; x: number; y: number; w: number; h: number; url: string; label: string };
+let hotspotsFn: ((W: number, H: number, scrollY: number) => HeroHotspot[]) | null = null;
+export function getHeroHotspots(W: number, H: number, scrollY: number): HeroHotspot[] {
+  return hotspotsFn ? hotspotsFn(W, H, scrollY) : [];
+}
+let heroHover = -1;
+export function setHeroHover(idx: number) { heroHover = idx; }
+export function getHeroHover() { return heroHover; }
+
 const HERO_BG = (() => {
-  type Trace = { x: number; y: number; dx: number; dy: number; len: number; t: number };
-  const traces: Trace[] = [];
-  for (let i = 0; i < 10; i++) traces.push({ x: Math.random(), y: Math.random(), dx: (Math.random() - .5) * .0018, dy: (Math.random() - .5) * .0018, len: .04 + Math.random() * .1, t: Math.random() * 1000 });
-  return function draw(ctx: Ctx, W: number, H: number, a: number) {
-    traces.forEach(tr => {
-      tr.t += .007; tr.x += tr.dx; tr.y += tr.dy;
-      if (tr.x < 0 || tr.x > 1) tr.dx *= -1; if (tr.y < 0 || tr.y > 1) tr.dy *= -1;
-      const p = Math.sin(tr.t) * .5 + .5;
-      ctx.strokeStyle = ink(.035 * p * a); ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(tr.x * W, tr.y * H); ctx.lineTo(tr.x * W + tr.len * W, tr.y * H); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(tr.x * W + tr.len * W, tr.y * H); ctx.lineTo(tr.x * W + tr.len * W, tr.y * H + tr.len * H * .5); ctx.stroke();
+  let t = 0;
+
+  // Mouse cursor — follows a slow Bezier path between random targets.
+  let curX = .55, curY = .35;
+  let curTx = .72, curTy = .55;
+  let curT = 0, curDuration = 200;
+
+  // Notifications — toast appears top-right occasionally. Tied to real engineering work.
+  const NOTIFS = [
+    '✓  Training run #47 converged · loss 0.041',
+    '↓  Pull request #42 merged into main',
+    '⚡ Vivado synth done · 100 MHz timing closure',
+    '◐  gem5 SPEC2017 simulation finished',
+    '✓  CUDA kernel benchmark · 2.3 TFLOPS',
+    '⌥  Code review requested · cuda-mccfr',
+  ];
+  let notifIdx = -1, notifShownAt = -9999;
+
+  // Dock icons preview the L7 → L1 journey.
+  type DockApp = { lbl: string; col: string; sub: string };
+  const DOCK: DockApp[] = [
+    { lbl: 'NN',  col: '#1d4ed8', sub: 'L7' },
+    { lbl: 'TCP', col: '#0891b2', sub: 'L6' },
+    { lbl: 'C',   col: '#7e22ce', sub: 'L5' },
+    { lbl: 'µP',  col: '#b45309', sub: 'L4' },
+    { lbl: 'RTL', col: '#0d9488', sub: 'L3' },
+    { lbl: '&',   col: '#15803d', sub: 'L2' },
+    { lbl: 'Si',  col: '#be123c', sub: 'L1' },
+  ];
+
+  // Desktop file/folder icons — real projects from the portfolio.
+  // `url` makes the icon clickable in StackClient: external URLs open in a new tab,
+  // anchors (#sec-l4) scroll to the matching section.
+  type DeskIcon = { x: number; y: number; lbl: string; kind: 'folder' | 'file'; url?: string };
+  const DESK: DeskIcon[] = [
+    { x: .92, y: .12, lbl: 'cuda-mccfr',    kind: 'folder', url: 'https://github.com/ericchen8231/cuda-mccfr' },
+    { x: .92, y: .27, lbl: 'rankify',       kind: 'folder', url: '#sec-l7' },
+    { x: .92, y: .42, lbl: 'resume.pdf',    kind: 'file',   url: '/personal-website/resume.pdf' },
+    { x: .92, y: .57, lbl: 'gem5-research', kind: 'folder', url: '#sec-l4' },
+    { x: .80, y: .12, lbl: 'MUJI-intern',   kind: 'folder', url: '#sec-l7' },
+    { x: .80, y: .27, lbl: 'thesis.pdf',    kind: 'file',   url: '#sec-l4' },
+  ];
+  // Hotspot helpers: getHeroHotspots returns clickable rects in *screen* coords
+  // (accounts for the camera dive zoom applied by StackClient at draw time).
+  // setHeroHover lets StackClient drive the hover-ring rendering.
+  function iconBounds(d: DeskIcon, W: number, H: number) {
+    const w0 = d.kind === 'folder' ? 50 : 38;
+    const h0 = d.kind === 'folder' ? 40 : 46;
+    const ix = d.x * W - 28, iy = d.y * H - 22;
+    // Bbox is generous: includes a small pad plus the label below.
+    return { x: ix - 4, y: iy - 2, w: w0 + 8, h: h0 + 18 };
+  }
+  hotspotsFn = function (W: number, H: number, scrollY: number) {
+    const heroProg = Math.min(1, Math.max(0, scrollY / H));
+    const heroEased = Math.sqrt(heroProg);
+    const zoom = 1 + heroEased * 1.4;
+    const cx = W / 2, cy = H / 2;
+    return DESK.flatMap((d, idx) => {
+      if (!d.url) return [] as ReturnType<typeof toHot>[];
+      const b = iconBounds(d, W, H);
+      return [toHot(idx, b.x, b.y, b.w, b.h, zoom, cx, cy, d.url, d.lbl)];
     });
+  };
+  function toHot(idx: number, x: number, y: number, w: number, h: number, zoom: number, cx: number, cy: number, url: string, label: string) {
+    return {
+      idx,
+      x: cx + (x - cx) * zoom,
+      y: cy + (y - cy) * zoom,
+      w: w * zoom,
+      h: h * zoom,
+      url, label,
+    };
+  }
+
+  // Rounded rect helper (handles browsers without ctx.roundRect).
+  function rrect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.lineTo(x + w - rr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+    ctx.lineTo(x + w, y + h - rr);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    ctx.lineTo(x + rr, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+    ctx.lineTo(x, y + rr);
+    ctx.quadraticCurveTo(x, y, x + rr, y);
+    ctx.closePath();
+  }
+
+  // macOS-ish folder icon: rounded body with folded "tab" at top.
+  function drawFolder(ctx: Ctx, x: number, y: number, w: number, h: number, alpha: number, glow: number) {
+    const tabH = h * 0.18, tabW = w * 0.4;
+    // Outer glow when focused.
+    if (glow > 0.01) {
+      ctx.save();
+      const gr = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, Math.max(w, h));
+      gr.addColorStop(0, `rgba(59,130,246,${0.45 * glow * alpha})`);
+      gr.addColorStop(0.5, `rgba(59,130,246,${0.18 * glow * alpha})`);
+      gr.addColorStop(1, 'rgba(59,130,246,0)');
+      ctx.fillStyle = gr;
+      ctx.fillRect(x - w * 0.4, y - h * 0.4, w * 1.8, h * 1.8);
+      ctx.restore();
+    }
+    // Folder back (darker)
+    ctx.fillStyle = `rgba(96,150,220,${0.85 * alpha})`;
+    rrect(ctx, x, y + tabH * 0.45, w, h - tabH * 0.45, h * 0.08);
+    ctx.fill();
+    // Folded tab
+    ctx.fillStyle = `rgba(80,135,205,${0.9 * alpha})`;
+    rrect(ctx, x + 2, y, tabW, tabH + 4, h * 0.06);
+    ctx.fill();
+    // Folder front (lighter, slight overlap with tab)
+    const grad = ctx.createLinearGradient(x, y + tabH, x, y + h);
+    grad.addColorStop(0, `rgba(132,180,235,${0.96 * alpha})`);
+    grad.addColorStop(1, `rgba(96,148,210,${0.96 * alpha})`);
+    ctx.fillStyle = grad;
+    rrect(ctx, x, y + tabH, w, h - tabH, h * 0.08);
+    ctx.fill();
+    // Highlight stroke
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 * alpha})`;
+    ctx.lineWidth = 1;
+    rrect(ctx, x + 1, y + tabH + 1, w - 2, h - tabH - 2, h * 0.08);
+    ctx.stroke();
+    // Outline
+    ctx.strokeStyle = `rgba(40,80,140,${0.5 * alpha})`;
+    ctx.lineWidth = 1;
+    rrect(ctx, x, y + tabH, w, h - tabH, h * 0.08);
+    ctx.stroke();
+  }
+
+  // Generic doc/file icon.
+  function drawFile(ctx: Ctx, x: number, y: number, w: number, h: number, alpha: number) {
+    const fold = w * 0.28;
+    ctx.fillStyle = `rgba(252,252,254,${0.95 * alpha})`;
+    ctx.strokeStyle = `rgba(80,90,110,${0.55 * alpha})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w - fold, y);
+    ctx.lineTo(x + w, y + fold);
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x, y + h);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Folded corner
+    ctx.fillStyle = `rgba(220,224,232,${0.9 * alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(x + w - fold, y);
+    ctx.lineTo(x + w - fold, y + fold);
+    ctx.lineTo(x + w, y + fold);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Lines of "text"
+    ctx.strokeStyle = `rgba(160,170,185,${0.65 * alpha})`;
+    for (let i = 0; i < 4; i++) {
+      const ly = y + fold + 8 + i * 7;
+      if (ly > y + h - 6) break;
+      ctx.beginPath(); ctx.moveTo(x + 6, ly); ctx.lineTo(x + w - 6, ly - i * .5); ctx.stroke();
+    }
+  }
+
+  return function draw(ctx: Ctx, vpW: number, vpH: number, a: number) {
+    t++;
+    const sp = Math.max(0, Math.min(1, heroScroll));
+
+    // ── Laptop frame geometry ──
+    // Generous margins so the laptop reads as "zoomed out on a desk."
+    // As the user scrolls, the camera zoom scales the whole canvas until the
+    // bezel/desk exits the viewport and the screen content fills the page.
+    const bzlMx = Math.max(60, vpW * 0.13);
+    const bzlMyTop = Math.max(40, vpH * 0.09);
+    const bzlMyBot = Math.max(72, vpH * 0.18);
+    const sX = bzlMx, sY = bzlMyTop;
+    const sW = vpW - 2 * bzlMx;
+    const sH = vpH - bzlMyTop - bzlMyBot;
+
+    // ── 1. Outer "room" / desk background — soft warm gray, easy on the eyes ──
+    {
+      const grad = ctx.createLinearGradient(0, 0, 0, vpH);
+      grad.addColorStop(0, `rgba(228,232,240,${0.92 * a})`);
+      grad.addColorStop(0.6, `rgba(212,218,228,${0.9 * a})`);
+      grad.addColorStop(1, `rgba(196,204,216,${0.92 * a})`);
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, vpW, vpH);
+    }
+
+    // ── 2. Laptop bezel — silver/aluminum-style, more distinct ──
+    {
+      const bX = sX - 10, bY = sY - 10, bW = sW + 20, bH = sH + 20;
+      // Soft outer shadow under the laptop.
+      ctx.save();
+      ctx.shadowColor = 'rgba(40,50,70,0.30)';
+      ctx.shadowBlur = 30;
+      ctx.shadowOffsetY = 14;
+      ctx.fillStyle = `rgba(180,188,200,${0.98 * a})`;
+      rrect(ctx, bX, bY, bW, bH, 14); ctx.fill();
+      ctx.restore();
+      // Bezel surface gradient (silver).
+      const bg = ctx.createLinearGradient(0, bY, 0, bY + bH);
+      bg.addColorStop(0, `rgba(208,214,224,${a})`);
+      bg.addColorStop(0.5, `rgba(184,192,206,${a})`);
+      bg.addColorStop(1, `rgba(160,170,184,${a})`);
+      ctx.fillStyle = bg;
+      rrect(ctx, bX, bY, bW, bH, 14); ctx.fill();
+      // Inner rim highlight (just inside the screen — slightly darker line on silver).
+      ctx.strokeStyle = `rgba(80,95,115,${0.35 * a})`;
+      ctx.lineWidth = 1;
+      rrect(ctx, sX - 1, sY - 1, sW + 2, sH + 2, 6); ctx.stroke();
+      // Camera notch (top-center sensor housing).
+      const notchW = Math.min(160, sW * 0.18), notchH = 6;
+      const notchX = sX + sW / 2 - notchW / 2;
+      ctx.fillStyle = `rgba(60,68,84,${a})`;
+      rrect(ctx, notchX, sY - 0.5, notchW, notchH, 3); ctx.fill();
+      // Webcam dot.
+      ctx.fillStyle = `rgba(200,60,60,${0.7 * a})`;
+      ctx.beginPath(); ctx.arc(notchX + notchW / 2, sY + notchH / 2, 1.2, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ── 3. Laptop body / hinge hint below the screen — silver tones ──
+    {
+      const hY = sY + sH + 10;
+      const hH = bzlMyBot - 10;
+      // Hinge strip.
+      const hg = ctx.createLinearGradient(0, hY, 0, hY + 8);
+      hg.addColorStop(0, `rgba(170,180,194,${a})`);
+      hg.addColorStop(1, `rgba(132,142,158,${a})`);
+      ctx.fillStyle = hg;
+      ctx.fillRect(sX - 14, hY, sW + 28, 6);
+      // Body keyboard deck (trapezoidal hint, lighter silver gradient).
+      ctx.beginPath();
+      ctx.moveTo(sX - 30, hY + 6);
+      ctx.lineTo(sX + sW + 30, hY + 6);
+      ctx.lineTo(sX + sW + 60, hY + hH);
+      ctx.lineTo(sX - 60, hY + hH);
+      ctx.closePath();
+      const dg = ctx.createLinearGradient(0, hY + 6, 0, hY + hH);
+      dg.addColorStop(0, `rgba(196,204,218,${a})`);
+      dg.addColorStop(1, `rgba(152,162,180,${a})`);
+      ctx.fillStyle = dg; ctx.fill();
+      ctx.strokeStyle = `rgba(60,72,90,${0.5 * a})`; ctx.lineWidth = 1; ctx.stroke();
+      // Subtle apple-logo-ish dot at the deck center.
+      ctx.fillStyle = `rgba(60,72,90,${0.45 * a})`;
+      ctx.beginPath(); ctx.arc(sX + sW / 2, hY + 6 + hH * 0.4, 3, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ── 4. Enter the screen: clip everything below to the screen rect ──
+    ctx.save();
+    rrect(ctx, sX, sY, sW, sH, 6);
+    ctx.clip();
+    // Switch to screen-local coordinate space (origin at top-left of screen).
+    ctx.translate(sX, sY);
+    const W = sW, H = sH;
+
+    // Wallpaper: bright sky-blue gradient with a warm horizon — easier on the eyes.
+    {
+      const cxw = W * 0.62, cyw = H * 0.45;
+      const grad = ctx.createRadialGradient(cxw, cyw, 0, cxw, cyw, Math.max(W, H));
+      grad.addColorStop(0, `rgba(170,210,250,${0.95 * a})`);
+      grad.addColorStop(0.45, `rgba(120,170,225,${0.95 * a})`);
+      grad.addColorStop(1, `rgba(80,130,195,${0.95 * a})`);
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+      // Warm horizon glow at bottom-right.
+      const g2 = ctx.createRadialGradient(W * 0.75, H * 0.85, 0, W * 0.75, H * 0.85, W * 0.6);
+      g2.addColorStop(0, `rgba(255,210,160,${0.32 * a})`);
+      g2.addColorStop(1, 'rgba(255,210,160,0)');
+      ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+    }
+
+    // ── 2. Top menu bar ──
+    const mbH = 24;
+    ctx.fillStyle = `rgba(245,248,253,${0.78 * a})`;
+    ctx.fillRect(0, 0, W, mbH);
+    ctx.strokeStyle = `rgba(60,80,110,${0.18 * a})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, mbH + .5); ctx.lineTo(W, mbH + .5); ctx.stroke();
+    ctx.fillStyle = `rgba(28,38,58,${0.92 * a})`;
+    ctx.font = 'bold 13px Courier New'; ctx.textAlign = 'left';
+    ctx.fillText('◉', 16, 17);
+    ctx.font = 'bold 11px Courier New';
+    ctx.fillText('Finder', 36, 16);
+    ctx.fillStyle = `rgba(60,75,100,${0.85 * a})`;
+    ctx.font = '11px Courier New';
+    {
+      let mbItemX = 96;
+      const menuGap = 22;
+      for (const it of ['File', 'Edit', 'View', 'Go', 'Window', 'Help']) {
+        ctx.fillText(it, mbItemX, 16);
+        mbItemX += ctx.measureText(it).width + menuGap;
+      }
+    }
+    // Right side: status + real clock
+    const now = new Date();
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const day = dayLabels[now.getDay()];
+    const hh12 = (now.getHours() % 12) || 12;
+    const mm2 = now.getMinutes().toString().padStart(2, '0');
+    const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
+    ctx.fillStyle = `rgba(40,52,76,${0.92 * a})`;
+    ctx.textAlign = 'right'; ctx.font = '11px Courier New';
+    ctx.fillText(`${day}  ${hh12}:${mm2} ${ampm}`, W - 16, 16);
+    ctx.font = 'bold 11px Courier New';
+    ctx.fillText('▮▮▮', W - 116, 16);
+    ctx.fillText('⌃', W - 144, 16);
+
+    // ── 3. Scattered desktop icons on the wallpaper ──
+    // These fade out as you scroll (the focal folder takes over).
+    const deskAlpha = a * (1 - sp * 0.85);
+    if (deskAlpha > 0.02) {
+      DESK.forEach((d, idx) => {
+        const ix = d.x * W - 28, iy = d.y * H - 22;
+        const w0 = d.kind === 'folder' ? 50 : 38;
+        const h0 = d.kind === 'folder' ? 40 : 46;
+        const isHov = heroHover === idx && d.url !== undefined;
+        // Selection ring behind the icon when hovered (mimics macOS Finder selection).
+        if (isHov) {
+          ctx.fillStyle = `rgba(59,130,246,${0.22 * deskAlpha})`;
+          rrect(ctx, ix - 6, iy - 6, w0 + 12, h0 + 18, 7);
+          ctx.fill();
+          ctx.strokeStyle = `rgba(59,130,246,${0.8 * deskAlpha})`;
+          ctx.lineWidth = 1.5;
+          rrect(ctx, ix - 6, iy - 6, w0 + 12, h0 + 18, 7);
+          ctx.stroke();
+        }
+        if (d.kind === 'folder') drawFolder(ctx, ix, iy, 50, 40, deskAlpha, isHov ? 0.6 : 0);
+        else drawFile(ctx, ix, iy, 38, 46, deskAlpha);
+        // Label with a small dark shadow background so it reads on the bright wallpaper.
+        ctx.fillStyle = isHov
+          ? `rgba(255,255,255,${0.98 * deskAlpha})`
+          : `rgba(20,30,48,${0.85 * deskAlpha})`;
+        if (isHov) {
+          // Solid blue label pill for the hovered icon.
+          const lblW = Math.max(48, d.lbl.length * 6 + 10);
+          ctx.fillStyle = `rgba(37,99,235,${0.92 * deskAlpha})`;
+          rrect(ctx, d.x * W - lblW / 2, d.y * H + 22, lblW, 14, 3);
+          ctx.fill();
+          ctx.fillStyle = `rgba(255,255,255,${0.98 * deskAlpha})`;
+        }
+        ctx.font = 'bold 10px Courier New'; ctx.textAlign = 'center';
+        ctx.fillText(d.lbl, d.x * W, d.y * H + 32);
+      });
+    }
+
+    // ── 4. Focal folder — the zoom target ──
+    // Position fixed on the camera's zoom origin so the camera dives directly into it.
+    // (The bg-canvas applies the camera zoom around (W+L_OFF-R_OFF)/2 in viewport coords;
+    //  since we draw at full viewport here, that point is W/2 - 137. Use a near-equivalent
+    //  fraction of W to stay responsive.)
+    const focalCx = W * 0.62, focalCy = H * 0.46;
+    // Base size + extra growth driven by scroll progress (sp is 0..1 across the hero).
+    const folderBase = Math.min(W, H) * 0.16;
+    const growth = 1 + sp * 0.9;
+    const fW = folderBase * 1.35 * growth, fH = folderBase * growth;
+    const fX = focalCx - fW / 2, fY = focalCy - fH / 2;
+    // Pulsing focus glow.
+    const focusPulse = 0.55 + 0.45 * Math.sin(t * 0.04);
+    drawFolder(ctx, fX, fY, fW, fH, a, focusPulse);
+    // Label below.
+    if (sp < 0.5) {
+      const labelAlpha = a * (1 - sp * 2);
+      ctx.fillStyle = `rgba(20,30,48,${0.95 * labelAlpha})`;
+      ctx.font = `bold ${Math.round(13 + sp * 6)}px Courier New`;
+      ctx.textAlign = 'center';
+      ctx.fillText('the_machine/', focalCx, fY + fH + 22);
+      ctx.fillStyle = `rgba(40,55,85,${0.8 * labelAlpha})`;
+      ctx.font = '10px Courier New';
+      ctx.fillText('scroll ↓ to dive in', focalCx, fY + fH + 38);
+    }
+    // When deep into the scroll, show "contents" emerging from the folder
+    // (gives the impression of the folder opening into the L7 view).
+    if (sp > 0.4) {
+      const openAlpha = (sp - 0.4) / 0.5;
+      const ringR = fW * 0.5 * (1 + openAlpha * 0.6);
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, openAlpha) * a * 0.6;
+      const g3 = ctx.createRadialGradient(focalCx, focalCy, 0, focalCx, focalCy, ringR);
+      g3.addColorStop(0, 'rgba(120,170,240,0.7)');
+      g3.addColorStop(0.6, 'rgba(60,110,200,0.4)');
+      g3.addColorStop(1, 'rgba(40,70,150,0)');
+      ctx.fillStyle = g3;
+      ctx.beginPath(); ctx.arc(focalCx, focalCy, ringR, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
+    // ── 5. Mouse cursor — wanders broadly, lightly biased toward the folder ──
+    curT++;
+    if (curT >= curDuration) {
+      curX = curTx; curY = curTy;
+      // 30% near the focal folder, 70% broad wander.
+      const pick = Math.random();
+      if (pick < 0.3) {
+        curTx = 0.62 + (Math.random() - 0.5) * 0.22;
+        curTy = 0.46 + (Math.random() - 0.5) * 0.20;
+      } else {
+        curTx = .25 + Math.random() * .60;
+        curTy = .25 + Math.random() * .55;
+      }
+      curT = 0; curDuration = 140 + Math.floor(Math.random() * 200);
+    } else {
+      const u = curT / curDuration;
+      const ease = u < .5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+      curX = curX + (curTx - curX) * ease * .03;
+      curY = curY + (curTy - curY) * ease * .03;
+    }
+    {
+      const mx = curX * W, my = curY * H;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1;
+      ctx.fillStyle = `rgba(255,255,255,${0.98 * a})`;
+      ctx.strokeStyle = `rgba(20,30,50,${0.95 * a})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(mx, my);
+      ctx.lineTo(mx, my + 17);
+      ctx.lineTo(mx + 4.5, my + 13);
+      ctx.lineTo(mx + 7.5, my + 19);
+      ctx.lineTo(mx + 9.5, my + 18);
+      ctx.lineTo(mx + 6.5, my + 12);
+      ctx.lineTo(mx + 11.5, my + 12);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+
+    // ── 7. Notification toast (top-right) ──
+    const notifGap = 720;
+    if (t - notifShownAt > notifGap) {
+      notifShownAt = t;
+      notifIdx = (notifIdx + 1) % NOTIFS.length;
+    }
+    const notifAge = t - notifShownAt;
+    const notifLife = 200;
+    if (notifAge < notifLife) {
+      const u = notifAge / notifLife;
+      const op = u < .15 ? u / .15 : u > .85 ? (1 - u) / .15 : 1;
+      const slide = u < .15 ? (1 - u / .15) * 24 : 0;
+      const nW = 240, nH = 40;
+      const nX = W - nW - 20 + slide, nY = mbH + 16;
+      ctx.save();
+      ctx.globalAlpha = op * a;
+      ctx.shadowColor = 'rgba(0,0,0,0.35)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = 'rgba(252,253,254,0.96)';
+      rrect(ctx, nX, nY, nW, nH, 10); ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = `rgba(255,255,255,${0.25 * op * a})`;
+      ctx.lineWidth = 1;
+      rrect(ctx, nX, nY, nW, nH, 10); ctx.stroke();
+      ctx.fillStyle = `rgba(30,38,55,${op * a})`;
+      ctx.font = 'bold 11px Courier New'; ctx.textAlign = 'left';
+      ctx.fillText(NOTIFS[notifIdx], nX + 14, nY + 25);
+    }
+
+    // ── Exit the clipped/translated screen space. ──
+    ctx.restore();
   };
 })();
 
