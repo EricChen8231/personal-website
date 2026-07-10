@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Accessibility basics', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
   });
 
   test('html lang attribute is set', async ({ page }) => {
@@ -50,7 +50,7 @@ test.describe('Accessibility basics', () => {
     await page.waitForTimeout(300);
 
     // The email link should be focusable
-    await page.locator('a[href="mailto:echen823@usc.edu"]').focus();
+    await page.locator('footer a[href="mailto:echen823@usc.edu"]').focus();
     const focused = await page.evaluate(() => document.activeElement?.tagName);
     expect(focused).toBe('A');
   });

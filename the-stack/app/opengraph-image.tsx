@@ -6,7 +6,7 @@ import { ImageResponse } from 'next/og';
 // Required for `output: "export"` — tells Next to materialize the PNG at build time
 // rather than treating this as a runtime-dynamic route.
 export const dynamic = 'force-static';
-export const alt = 'Eric Chen — end-to-end engineer, L1 → L7';
+export const alt = 'Eric Chen — L1 → L7';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -60,7 +60,7 @@ export default async function OG() {
             display: 'flex',
           }}
         >
-          End-to-end engineer — literally. From 45nm CMOS cells to production APIs.
+          From 45nm CMOS cells to production APIs.
         </div>
 
         {/* L1 → L7 strip */}

@@ -194,7 +194,7 @@ export default function StackClient() {
         sigX.fillStyle = act ? cDot : cDim;
         sigX.beginPath(); sigX.arc(tx, ny, act ? 5 : 3, 0, Math.PI * 2); sigX.fill();
         sigX.fillStyle = act ? cFill : cDim;
-        sigX.font = '7px Courier New'; sigX.textAlign = 'center'; sigX.fillText(`L${l.id}`, tx, ny + 13);
+        sigX.font = '7px ui-monospace, Menlo, Consolas, monospace'; sigX.textAlign = 'center'; sigX.fillText(`L${l.id}`, tx, ny + 13);
       });
       const dy = pt + th * scrollProgRef.current, pr = 3 + Math.sin(sigT * Math.PI * 6) * 1.5;
       sigX.fillStyle = cTrack; sigX.beginPath(); sigX.arc(tx, dy, pr * 2.5, 0, Math.PI * 2); sigX.fill();
@@ -391,7 +391,7 @@ export default function StackClient() {
         binaryEl.innerHTML =
           '<table class="carry-table">' + hdr + aRow + bRow + pRow + gRow + cRow + sRow + '</table>' +
           '<div style="margin-top:5px;font-size:10px;color:var(--text4);' +
-          'font-family:\'Courier New\',monospace">' +
+          'font-family:ui-monospace, Menlo, Consolas, monospace">' +
           pad(A, 4) + ' + ' + pad(B, 4) + ' = ' + C4 +
           cols.map(i => sumBits[i]).join('') +
           '&nbsp;&nbsp;(' + (s > 15 ? 'Cout=1, overflow' : 'no overflow') + ')</div>';
@@ -473,8 +473,8 @@ export default function StackClient() {
       cat: (args) => {
         const f = (args[0] || '').replace(/\.txt$/, '');
         if (f === 'about') {
-          print('end-to-end engineer — literally. comfortable from 45nm cmos cells', 't-info');
-          print('all the way up to production apis. happiest where physics meets', 't-info');
+          print('engineer working from 45nm cmos cells up to production apis.', 't-info');
+          print('happiest where physics meets', 't-info');
           print('abstraction: branch predictors, mosfet biasing, gpu kernels, distributed', 't-info');
           print('training. lately: training models on large codebases + cuda mccfr.', 't-info');
         } else if (f === 'skills') {

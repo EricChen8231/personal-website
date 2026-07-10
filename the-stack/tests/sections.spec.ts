@@ -10,12 +10,12 @@ const SECTIONS = [
   { id: 'sec-l3',        title: 'FPGA & HDL Design',       layer: 3    },
   { id: 'sec-l2',        title: 'Analog & Mixed-Signal',   layer: 2    },
   { id: 'sec-l1',        title: 'Semiconductor Devices',   layer: 1    },
-  { id: 'sec-interests', title: 'Outside the stack',       layer: null },
+  { id: 'sec-interests', title: 'Outside the lab',         layer: null },
 ];
 
 test.describe('Stack sections exist', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
   });
 
   for (const sec of SECTIONS) {
@@ -37,14 +37,14 @@ test.describe('Stack sections exist', () => {
 
   test('all 7 data-layer attributes are present', async ({ page }) => {
     for (let i = 1; i <= 7; i++) {
-      await expect(page.locator(`[data-layer="${i}"]`)).toBeAttached();
+      await expect(page.locator(`section[data-layer="${i}"]`)).toBeAttached();
     }
   });
 });
 
 test.describe('Section scroll-in animations', () => {
   test('section-inner starts invisible', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     // Before scrolling, the first section-inner should be invisible (opacity 0)
     const first = page.locator('.section-inner').first();
     const opacity = await first.evaluate(el => getComputedStyle(el).opacity);
@@ -53,7 +53,7 @@ test.describe('Section scroll-in animations', () => {
   });
 
   test('section-inner becomes visible after scroll', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     const section = page.locator('#sec-now .section-inner');
     await section.scrollIntoViewIfNeeded();
     await page.waitForTimeout(700);

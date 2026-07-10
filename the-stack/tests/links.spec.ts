@@ -2,24 +2,24 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Footer links', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     // Scroll to footer
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await page.waitForTimeout(300);
   });
 
   test('email link points to USC address', async ({ page }) => {
-    const emailLink = page.locator('a[href="mailto:echen823@usc.edu"]');
+    const emailLink = page.locator('footer a[href="mailto:echen823@usc.edu"]');
     await expect(emailLink).toBeVisible();
   });
 
   test('LinkedIn link points to correct profile', async ({ page }) => {
-    const linkedinLink = page.locator('a[href*="linkedin.com/in/ericchen823"]');
+    const linkedinLink = page.locator('footer a[href*="linkedin.com/in/ericchen823"]');
     await expect(linkedinLink).toBeVisible();
   });
 
   test('GitHub link points to correct profile', async ({ page }) => {
-    const githubLink = page.locator('a[href*="github.com/ericchen8231"]');
+    const githubLink = page.locator('footer a[href="https://github.com/ericchen8231"]');
     await expect(githubLink).toBeVisible();
   });
 
@@ -42,13 +42,13 @@ test.describe('Footer links', () => {
 
 test.describe('Meta tags', () => {
   test('page title is set', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     await expect(page).toHaveTitle(/Eric Chen/);
   });
 
   test('meta description is set', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     const desc = page.locator('meta[name="description"]');
-    await expect(desc).toHaveAttribute('content', /full-stack/i);
+    await expect(desc).toHaveAttribute('content', /45nm CMOS/i);
   });
 });

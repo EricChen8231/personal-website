@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('L2 interactive adder', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     // Scroll the L2 section into view so StackClient wires up the inputs
     await page.locator('#sec-l2').scrollIntoViewIfNeeded();
     await page.waitForTimeout(400);
@@ -44,13 +44,13 @@ test.describe('L2 interactive adder', () => {
 
 test.describe('Terminal log populates', () => {
   test('terminal shows "Ready" after init', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     const termBody = page.locator('#term-body');
     await expect(termBody).toContainText('Ready', { timeout: 10000 });
   });
 
   test('terminal shows all 7 layer loaded messages', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     // Wait for all layers to load in the terminal (7 * 140ms + buffer)
     await page.waitForTimeout(3000);
     for (let i = 1; i <= 7; i++) {

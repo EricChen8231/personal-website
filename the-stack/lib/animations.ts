@@ -4,10 +4,13 @@
 
 type Ctx = CanvasRenderingContext2D;
 
-const ink = (a: number) => `rgba(24,24,27,${a})`;
+const ink = (a: number) => {
+  const dark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  return dark ? `rgba(230,237,243,${a})` : `rgba(24,24,27,${a})`;
+};
 
 function drawGrid(ctx: Ctx, W: number, H: number) {
-  ctx.fillStyle = 'rgba(24,24,27,0.055)';
+  ctx.fillStyle = ink(0.055);
   for (let x = 0; x < W; x += 28)
     for (let y = 0; y < H; y += 28) {
       ctx.beginPath(); ctx.arc(x, y, 0.7, 0, Math.PI * 2); ctx.fill();
@@ -180,13 +183,13 @@ const L7 = (() => {
         ctx.fillStyle = fill; ctx.strokeStyle = stroke; ctx.lineWidth = 1.2;
         ctx.beginPath(); ctx.arc(lx, ny2, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         if (l === layers.length - 1 && isFwdLit) {
-          ctx.fillStyle = ink(.45 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
+          ctx.fillStyle = ink(.45 * a); ctx.font = '8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left';
           ctx.fillText(act.toFixed(2), lx + 13, ny2 + 3);
         }
       }
-      ctx.fillStyle = ink(.24 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'center';
+      ctx.fillStyle = ink(.24 * a); ctx.font = '9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
       ctx.fillText(lNames[l], netX + l * (netW / (layers.length - 1)), netY - 8);
-      ctx.fillStyle = ink(.14 * a); ctx.font = '8px Courier New';
+      ctx.fillStyle = ink(.14 * a); ctx.font = '8px ui-monospace, Menlo, Consolas, monospace';
       ctx.fillText('×' + n, netX + l * (netW / (layers.length - 1)), netY + netH + 12);
     });
     for (let i = pulses.length - 1; i >= 0; i--) {
@@ -199,12 +202,12 @@ const L7 = (() => {
       // Bright halo + dark glyph: legible on light AND dark backgrounds.
       ctx.fillStyle = `rgba(255,255,255,${fade * .9 * a})`;
       ctx.beginPath(); ctx.arc(px, py, 3.6, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = `rgba(24,24,27,${fade * .9 * a})`; ctx.font = 'bold 7px Courier New'; ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(24,24,27,${fade * .9 * a})`; ctx.font = 'bold 7px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
       ctx.fillText(p.val.toFixed(2), px, py + 2);
     }
     const phLbl = phase === 'fwd' ? '→ forward pass' : phase === 'bwd' ? '← backprop' : 'updating weights';
     const phCol = phase === 'bwd' ? `rgba(190,18,60,${.55 * a})` : ink(.4 * a);
-    ctx.fillStyle = phCol; ctx.font = '10px Courier New'; ctx.textAlign = 'left';
+    ctx.fillStyle = phCol; ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left';
     ctx.fillText(phLbl, netX, netY - 22);
     ctx.fillStyle = ink(.22 * a); ctx.textAlign = 'right';
     ctx.fillText(`epoch ${epoch}  step ${step}`, netX + netW, netY - 22);
@@ -213,7 +216,7 @@ const L7 = (() => {
     // ── Loss panel ──
     ctx.fillStyle = `rgba(244,244,245,${.45 * a})`; ctx.strokeStyle = ink(.1 * a); ctx.lineWidth = 1;
     ctx.fillRect(lossX, lossY, halfW, lossH); ctx.strokeRect(lossX, lossY, halfW, lossH);
-    ctx.fillStyle = ink(.2 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
+    ctx.fillStyle = ink(.2 * a); ctx.font = '8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left';
     ctx.fillText('training loss', lossX + 4, lossY + 10);
     const pts: [number, number][] = [];
     for (let i = 0; i < lossHist.length; i++) {
@@ -228,13 +231,13 @@ const L7 = (() => {
       ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
       pts.slice(1).forEach(([px2, py2]) => ctx.lineTo(px2, py2)); ctx.stroke();
     }
-    ctx.fillStyle = `rgba(21,128,61,${.6 * a})`; ctx.font = '9px Courier New'; ctx.textAlign = 'right';
+    ctx.fillStyle = `rgba(21,128,61,${.6 * a})`; ctx.font = '9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'right';
     ctx.fillText('loss=' + lossVal.toFixed(3), lossX + halfW - 4, lossY + 10);
     // ── Accuracy panel ──
     const accX = lossX + halfW + 6;
     ctx.fillStyle = `rgba(244,244,245,${.45 * a})`; ctx.strokeStyle = ink(.1 * a); ctx.lineWidth = 1;
     ctx.fillRect(accX, lossY, halfW, lossH); ctx.strokeRect(accX, lossY, halfW, lossH);
-    ctx.fillStyle = ink(.2 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
+    ctx.fillStyle = ink(.2 * a); ctx.font = '8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left';
     ctx.fillText('val accuracy', accX + 4, lossY + 10);
     const accPts: [number, number][] = [];
     for (let i = 0; i < accHist.length; i++) {
@@ -255,7 +258,7 @@ const L7 = (() => {
       ctx.beginPath(); ctx.moveTo(accPts[0][0], accPts[0][1]);
       accPts.slice(1).forEach(([px2, py2]) => ctx.lineTo(px2, py2)); ctx.stroke();
     }
-    ctx.fillStyle = `rgba(29,78,216,${.65 * a})`; ctx.font = '9px Courier New'; ctx.textAlign = 'right';
+    ctx.fillStyle = `rgba(29,78,216,${.65 * a})`; ctx.font = '9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'right';
     ctx.fillText('acc=' + (accVal * 100).toFixed(1) + '%', accX + halfW - 4, lossY + 10);
 
     // ── Weight-update markers, only visible during pause phase ──
@@ -265,7 +268,7 @@ const L7 = (() => {
         d.age++;
         const fade = Math.max(0, 1 - d.age / 30);
         const col = d.sign > 0 ? `rgba(21,128,61,${fade * .85 * a})` : `rgba(190,18,60,${fade * .85 * a})`;
-        ctx.fillStyle = col; ctx.font = `bold ${8 + d.mag * 6}px Courier New`; ctx.textAlign = 'center';
+        ctx.fillStyle = col; ctx.font = `bold ${8 + d.mag * 6}px ui-monospace, Menlo, Consolas, monospace`; ctx.textAlign = 'center';
         ctx.fillText(d.sign > 0 ? '+Δw' : '−Δw', d.x, d.y - d.age * .4);
       });
     }
@@ -450,7 +453,7 @@ const L6 = (() => {
       ctx.fillRect(rx, ry, rw, rh); ctx.strokeRect(rx, ry, rw, rh);
       ctx.setLineDash([]);
       ctx.fillStyle = sub.col + (0.7 * a) + ')';
-      ctx.font = 'bold 8px Courier New'; ctx.textAlign = 'left';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left';
       ctx.fillText(sub.label, rx + 4, ry + 11);
     });
 
@@ -477,7 +480,7 @@ const L6 = (() => {
       ctx.fillStyle = on ? `rgba(248,250,255,${.96 * a})` : `rgba(248,250,253,${.8 * a})`;
       ctx.strokeStyle = on ? ink(.5 * a) : ink(.25 * a); ctx.lineWidth = on ? 1.6 : 1;
       ctx.beginPath(); ctx.arc(rx, ry, 15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = on ? ink(.85 * a) : ink(.5 * a); ctx.font = 'bold 10px Courier New'; ctx.textAlign = 'center';
+      ctx.fillStyle = on ? ink(.85 * a) : ink(.5 * a); ctx.font = 'bold 10px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
       ctx.fillText(r.n, rx, ry + 4);
     });
     pkts = pkts.filter(p => p.hop < p.path.length - 1);
@@ -514,7 +517,7 @@ const L6 = (() => {
       // Hot label showing protocol + remaining TTL (red if low).
       const ttlCol = p.ttl <= 2 ? 'rgba(190,18,60,' : col;
       ctx.fillStyle = `${ttlCol}${0.88 * a})`;
-      ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'center';
+      ctx.font = 'bold 9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
       ctx.fillText(`${p.proto} TTL=${p.ttl}`, p._cx, p._cy - 12);
     });
     // ── Drop animations: red X + "ICMP time-exceeded" label ──
@@ -536,7 +539,7 @@ const L6 = (() => {
       // Label.
       if (u < 0.7) {
         ctx.fillStyle = `rgba(190,18,60,${0.85 * fade * a})`;
-        ctx.font = 'bold 8px Courier New'; ctx.textAlign = 'center';
+        ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
         ctx.fillText('ICMP time-exceeded', d.x, d.y - r - 6);
       }
     });
@@ -555,7 +558,7 @@ const L6 = (() => {
           ctx.beginPath(); ctx.arc(tp.x, tp.y, 5 * (ti + 1) / synAckPkt!.trail.length, 0, Math.PI * 2); ctx.fill();
         });
         ctx.fillStyle = `rgba(21,128,61,${0.85 * a})`; ctx.beginPath(); ctx.arc(sx2, sy2, 5.5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = `rgba(21,128,61,${0.8 * a})`; ctx.font = '9px Courier New'; ctx.textAlign = 'center';
+        ctx.fillStyle = `rgba(21,128,61,${0.8 * a})`; ctx.font = '9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
         ctx.fillText('SYN-ACK ←', sx2, sy2 - 11);
       }
     }
@@ -580,15 +583,15 @@ const L6 = (() => {
       ctx.strokeStyle = ink(.3 * a); ctx.lineWidth = 1;
       ctx.fillRect(spX, spY, spW, spH); ctx.strokeRect(spX, spY, spW, spH);
       ctx.fillStyle = ink(.55 * a);
-      ctx.font = 'bold 8px Courier New'; ctx.textAlign = 'left';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left';
       ctx.fillText('NETSTAT', spX + 8, spY + 12);
-      ctx.font = '9px Courier New';
+      ctx.font = '9px ui-monospace, Menlo, Consolas, monospace';
       ctx.fillStyle = ink(.6 * a);
       ctx.fillText('pkts/s', spX + 8, spY + 26);
       ctx.fillText('bytes/s', spX + 8, spY + 38);
       ctx.fillText('flows', spX + 8, spY + 50);
       ctx.fillText('drops/s', spX + 8, spY + 60);
-      ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'right';
+      ctx.font = 'bold 9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'right';
       ctx.fillStyle = `rgba(29,78,216,${0.9 * a})`;
       ctx.fillText(String(stats.pps), spX + spW - 8, spY + 26);
       ctx.fillStyle = `rgba(29,78,216,${0.9 * a})`;
@@ -633,7 +636,7 @@ const L5 = (() => {
 
     const xs = [W * .11, W * .34, W * .57, W * .80], cy = H / 2;
     ['SOURCE', 'TOKENS', 'AST', 'ASM'].forEach((h, i) => {
-      ctx.fillStyle = ink(.25 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'center'; ctx.fillText(h, xs[i], cy - 128);
+      ctx.fillStyle = ink(.25 * a); ctx.font = '9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.fillText(h, xs[i], cy - 128);
       ctx.strokeStyle = ink(.07 * a); ctx.lineWidth = 1; ctx.setLineDash([3, 5]);
       ctx.beginPath(); ctx.moveTo(xs[i], cy - 120); ctx.lineTo(xs[i], cy + 130); ctx.stroke(); ctx.setLineDash([]);
     });
@@ -644,7 +647,7 @@ const L5 = (() => {
     }
     const sourceLines = ['int x=42;', 'int y=8;', 'ret x+y;'], sourceY = [cy - 20, cy + 2, cy + 24];
     sourceLines.forEach((l, i) => {
-      ctx.fillStyle = ink(.4 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'left'; ctx.fillText(l, xs[0] - 38, sourceY[i]);
+      ctx.fillStyle = ink(.4 * a); ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left'; ctx.fillText(l, xs[0] - 38, sourceY[i]);
     });
     const scanProgress = (t % 240) / 240, scanCursorX = xs[0] - 38 + scanProgress * 70;
     ctx.strokeStyle = `rgba(29,78,216,${.5 * a})`; ctx.lineWidth = 2;
@@ -675,7 +678,7 @@ const L5 = (() => {
     });
     toks.forEach((tok, i) => {
       const ap = Math.sin(t * .035 + i * .55) * .5 + .5;
-      ctx.globalAlpha = ap * a; ctx.fillStyle = tok.c; ctx.font = '11px Courier New'; ctx.textAlign = 'center';
+      ctx.globalAlpha = ap * a; ctx.fillStyle = tok.c; ctx.font = '11px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
       ctx.fillText(tok.t, xs[1] - 26 + (i % 3) * 24, cy - 46 + Math.floor(i / 3) * 22); ctx.globalAlpha = 1;
     });
     type AstNode = { l: string; x: number; y: number };
@@ -691,20 +694,20 @@ const L5 = (() => {
       else { ctx.fillStyle = `rgba(244,244,245,${.9 * a})`; ctx.strokeStyle = ink(.25 * a); ctx.lineWidth = 1; }
       ctx.beginPath(); ctx.arc(n.x, n.y, 12, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.fillStyle = isHL ? `rgba(29,78,216,${(.8 + highlightIntensity * .2) * a})` : ink(.55 * a);
-      ctx.font = `${isHL ? '600 ' : ''}10px Courier New`; ctx.textAlign = 'center'; ctx.fillText(n.l, n.x, n.y + 4);
+      ctx.font = `${isHL ? '600 ' : ''}10px ui-monospace, Menlo, Consolas, monospace`; ctx.textAlign = 'center'; ctx.fillText(n.l, n.x, n.y + 4);
     });
     const cur = Math.floor(t * .04) % asm.length;
     asm.forEach((l, i) => {
       if (i === cur) { ctx.fillStyle = ink(.07 * a); ctx.fillRect(xs[3] - 46, cy - 50 + i * 22 - 11, 95, 15); }
       ctx.fillStyle = i === cur ? ink(.8 * a) : ink(.28 * a);
-      ctx.font = `${i === cur ? '600 ' : ''}10px Courier New`; ctx.textAlign = 'left'; ctx.fillText(l, xs[3] - 44, cy - 39 + i * 22);
+      ctx.font = `${i === cur ? '600 ' : ''}10px ui-monospace, Menlo, Consolas, monospace`; ctx.textAlign = 'left'; ctx.fillText(l, xs[3] - 44, cy - 39 + i * 22);
     });
     particles.forEach(p => {
       ctx.fillStyle = p.color; ctx.globalAlpha = .85 * a;
       ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
       ctx.strokeStyle = `rgba(244,244,245,${.3 * a})`; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = `rgba(244,244,245,${.9 * a})`; ctx.font = '8px Courier New'; ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(244,244,245,${.9 * a})`; ctx.font = '8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
       ctx.fillText(p.label, p.x, p.y + 3);
     });
 
@@ -968,7 +971,7 @@ const L4 = (() => {
     const clockPhase = (t % FRAMES_PER_CYCLE) / FRAMES_PER_CYCLE;
     const clockPulse = clockPhase < 0.25 ? 1 - clockPhase * 4 : 0;
     ctx.fillStyle = `rgba(34,197,94,${(.55 + clockPulse * .4) * a})`;
-    ctx.font = 'bold 14px Courier New';
+    ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
     ctx.textAlign = 'left';
     ctx.fillText('cycle ' + cycle, sx, titleY);
     ctx.fillStyle = `rgba(34,197,94,${.85 * (.3 + clockPulse) * a})`;
@@ -976,7 +979,7 @@ const L4 = (() => {
     ctx.arc(sx + 78, titleY - 4, 3 + clockPulse * 2.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = ink(.55 * a);
-    ctx.font = 'bold 11px Courier New';
+    ctx.font = 'bold 11px ui-monospace, Menlo, Consolas, monospace';
     ctx.textAlign = 'center';
     ctx.fillText('Tomasulo OoO Machine · wakeup-select + ROB commit', sx + wAvail / 2, titleY);
     // IPC sparkline
@@ -985,10 +988,10 @@ const L4 = (() => {
     ctx.fillStyle = `rgba(244,244,245,${.55 * a})`;
     ctx.strokeStyle = ink(.14 * a); ctx.lineWidth = 1;
     ctx.fillRect(spkX, spkY, spkW, spkH); ctx.strokeRect(spkX, spkY, spkW, spkH);
-    ctx.fillStyle = ink(.4 * a); ctx.font = '7px Courier New'; ctx.textAlign = 'left';
+    ctx.fillStyle = ink(.4 * a); ctx.font = '7px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left';
     ctx.fillText('IPC', spkX + 4, spkY + 9);
     const lastIpc = ipcHist[(ipcPtr - 1 + ipcHist.length) % ipcHist.length];
-    ctx.fillStyle = ink(.65 * a); ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'right';
+    ctx.fillStyle = ink(.65 * a); ctx.font = 'bold 9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'right';
     ctx.fillText(lastIpc.toFixed(2), spkX + spkW - 4, spkY + 10);
     ctx.strokeStyle = `rgba(21,128,61,${.75 * a})`; ctx.lineWidth = 1.4;
     ctx.beginPath();
@@ -1002,7 +1005,7 @@ const L4 = (() => {
     // Branch speculation indicator
     if (specBranch) {
       ctx.fillStyle = `rgba(244,114,182,${.85 * a})`;
-      ctx.font = 'bold 8px Courier New';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left';
       ctx.fillText('▸ SPEC bnz #' + specBranch.seq, sx + 100, titleY);
     }
@@ -1018,7 +1021,7 @@ const L4 = (() => {
       ctx.lineWidth = isHov ? 1.5 : 1;
       ctx.fillRect(x, y, bW, bH); ctx.strokeRect(x, y, bW, bH);
       ctx.fillStyle = boxAccent[bi] + (.75 * a) + ')';
-      ctx.font = 'bold 10px Courier New';
+      ctx.font = 'bold 10px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'center';
       ctx.fillText(boxLabels[bi], x + bW / 2, y + 13);
     }
@@ -1026,7 +1029,7 @@ const L4 = (() => {
     // Box 0: FE — show instruction queue with real operands
     {
       const x = bX[0], y = boxesY;
-      ctx.font = '8px Courier New';
+      ctx.font = '8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left';
       feQueue.slice(0, 3).forEach((inst, j) => {
         const ly = y + 26 + j * 12;
@@ -1035,13 +1038,13 @@ const L4 = (() => {
         ctx.fillText(instLabel(inst, true), x + 6, ly);
         if (isSpec) {
           ctx.fillStyle = `rgba(244,114,182,${.55 * a})`;
-          ctx.font = '6px Courier New';
+          ctx.font = '6px ui-monospace, Menlo, Consolas, monospace';
           ctx.fillText('spec', x + bW - 22, ly);
-          ctx.font = '8px Courier New';
+          ctx.font = '8px ui-monospace, Menlo, Consolas, monospace';
         }
       });
       ctx.fillStyle = ink(.4 * a);
-      ctx.font = '7px Courier New';
+      ctx.font = '7px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'right';
       ctx.fillText(feQueue.length + '/' + FE_CAP + ' fetched', x + bW - 4, y + bH - 4);
     }
@@ -1054,7 +1057,7 @@ const L4 = (() => {
         const cxx = x + 4 + ti * colW;
         ctx.fillStyle = rsCl[tp];
         ctx.globalAlpha = .9 * a;
-        ctx.font = 'bold 7px Courier New';
+        ctx.font = 'bold 7px ui-monospace, Menlo, Consolas, monospace';
         ctx.textAlign = 'center';
         ctx.fillText(tp, cxx + colW / 2, y + 25);
         ctx.globalAlpha = 1;
@@ -1065,7 +1068,7 @@ const L4 = (() => {
           ctx.fillStyle = allRdy ? `rgba(21,128,61,${.62 * a})` : `rgba(110,110,120,${.45 * a})`;
           ctx.fillRect(cxx + 2, ey, colW - 4, 12);
           ctx.fillStyle = `rgba(255,255,255,${.95 * a})`;
-          ctx.font = 'bold 7px Courier New';
+          ctx.font = 'bold 7px ui-monospace, Menlo, Consolas, monospace';
           ctx.textAlign = 'center';
           ctx.fillText(inst.tag + (allRdy ? '·R' : ''), cxx + colW / 2, ey + 9);
         });
@@ -1081,7 +1084,7 @@ const L4 = (() => {
         const f = fu[tp];
         ctx.fillStyle = rsCl[tp];
         ctx.globalAlpha = .9 * a;
-        ctx.font = 'bold 7px Courier New';
+        ctx.font = 'bold 7px ui-monospace, Menlo, Consolas, monospace';
         ctx.textAlign = 'left';
         ctx.fillText(tp, x + 4, ry + 9);
         ctx.globalAlpha = 1;
@@ -1095,12 +1098,12 @@ const L4 = (() => {
           ctx.fillRect(barX, ry + 3, barW2 * prog, barH);
           ctx.globalAlpha = 1;
           ctx.fillStyle = ink(.55 * a);
-          ctx.font = '6px Courier New';
+          ctx.font = '6px ui-monospace, Menlo, Consolas, monospace';
           ctx.textAlign = 'right';
           ctx.fillText(f.inst.tag, barX + barW2 - 2, ry + rowH - 1);
         } else {
           ctx.fillStyle = ink(.3 * a);
-          ctx.font = '6px Courier New';
+          ctx.font = '6px ui-monospace, Menlo, Consolas, monospace';
           ctx.textAlign = 'right';
           ctx.fillText('idle', barX + barW2 - 2, ry + rowH - 1);
         }
@@ -1115,7 +1118,7 @@ const L4 = (() => {
       const ready = Object.values(rsE).reduce((s, e) => s + e.filter(i => i.rdy1 && i.rdy2).length, 0);
       const waiting = Object.values(rsE).reduce((s, e) => s + e.filter(i => !(i.rdy1 && i.rdy2)).length, 0);
       ctx.fillStyle = ink(.6 * a);
-      ctx.font = '8px Courier New';
+      ctx.font = '8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left';
       ctx.fillText('ROB  ' + robCount + '/12', x + 6, y + 26);
       ctx.fillText('RAT  ' + ratCount + '/8', x + 6, y + 38);
@@ -1137,7 +1140,7 @@ const L4 = (() => {
     // ===== Mini-ROB strip (always visible) =====
     {
       ctx.fillStyle = ink(.55 * a);
-      ctx.font = 'bold 8px Courier New';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left';
       ctx.fillText('Reorder Buffer (in-order commit →)', sx, miniROBY - 4);
       const robSlotW = wAvail / 12;
@@ -1158,7 +1161,7 @@ const L4 = (() => {
           ctx.fillRect(ex + 1, miniROBY, robSlotW - 3, robSlotH);
         }
         ctx.fillStyle = ink(.32 * a);
-        ctx.font = '6px Courier New';
+        ctx.font = '6px ui-monospace, Menlo, Consolas, monospace';
         ctx.textAlign = 'left';
         ctx.fillText('T' + i, ex + 3, miniROBY + 7);
         if (inst) {
@@ -1169,16 +1172,16 @@ const L4 = (() => {
           ctx.fill();
           ctx.globalAlpha = 1;
           ctx.fillStyle = ink(.55 * a);
-          ctx.font = '7px Courier New';
+          ctx.font = '7px ui-monospace, Menlo, Consolas, monospace';
           ctx.textAlign = 'center';
           ctx.fillText(inst.op + (inst.dst > 0 ? ' r' + inst.dst : ''), ex + robSlotW / 2, miniROBY + 21);
           ctx.fillStyle = isDone ? `rgba(21,128,61,${.85 * a})` : ink(.3 * a);
-          ctx.font = '7px Courier New';
+          ctx.font = '7px ui-monospace, Menlo, Consolas, monospace';
           ctx.fillText(isDone ? '✓' : '·', ex + robSlotW / 2, miniROBY + 28);
         }
         if (isHead) {
           ctx.fillStyle = ink(.6 * a);
-          ctx.font = '8px Courier New';
+          ctx.font = '8px ui-monospace, Menlo, Consolas, monospace';
           ctx.textAlign = 'center';
           ctx.fillText('▲ head', ex + robSlotW / 2, miniROBY + robSlotH + 9);
         }
@@ -1188,7 +1191,7 @@ const L4 = (() => {
     // ===== RAT strip =====
     {
       ctx.fillStyle = ink(.55 * a);
-      ctx.font = 'bold 8px Courier New';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left';
       ctx.fillText('RAT — arch reg → in-flight tag (eliminates WAR/WAW)', sx, ratY - 4);
       const ratSlotW = wAvail / 8;
@@ -1203,11 +1206,11 @@ const L4 = (() => {
         ctx.fillRect(ex + 1, ratY, ratSlotW - 3, ratH);
         ctx.strokeRect(ex + 1, ratY, ratSlotW - 3, ratH);
         ctx.fillStyle = ink(.45 * a);
-        ctx.font = '7px Courier New';
+        ctx.font = '7px ui-monospace, Menlo, Consolas, monospace';
         ctx.textAlign = 'left';
         ctx.fillText('r' + i, ex + 4, ratY + 8);
         ctx.fillStyle = tag ? ink(.75 * a) : ink(.25 * a);
-        ctx.font = 'bold 8px Courier New';
+        ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
         ctx.textAlign = 'right';
         ctx.fillText(tag || '—', ex + ratSlotW - 5, ratY + 13);
       }
@@ -1216,7 +1219,7 @@ const L4 = (() => {
     // ===== Gantt chart =====
     {
       ctx.fillStyle = ink(.55 * a);
-      ctx.font = 'bold 8px Courier New';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left';
       ctx.fillText('Pipeline timeline — out-of-order execution, in-order commit →', sx, ganttY - 4);
       const cyclesShown = 18;
@@ -1229,7 +1232,7 @@ const L4 = (() => {
           const cycNum = cycle - cyclesShown + c + 1;
           if (cycNum > 0) {
             ctx.fillStyle = ink(.38 * a);
-            ctx.font = '7px Courier New';
+            ctx.font = '7px ui-monospace, Menlo, Consolas, monospace';
             ctx.textAlign = 'center';
             ctx.fillText(String(cycNum), sx + labelW + c * colW + colW / 2, ganttY + headerH - 1);
           }
@@ -1254,7 +1257,7 @@ const L4 = (() => {
       rows.forEach((entry, ri) => {
         const ry = ganttY + headerH + ri * rowH;
         ctx.fillStyle = entry.squashed ? `rgba(190,18,60,${.7 * a})` : ink(.6 * a);
-        ctx.font = '7px Courier New';
+        ctx.font = '7px ui-monospace, Menlo, Consolas, monospace';
         ctx.textAlign = 'right';
         ctx.fillText(instLabel(entry, true), sx + labelW - 4, ry + rowH - 4);
         const stages: { name: string; cyc: number; col: string }[] = [
@@ -1276,7 +1279,7 @@ const L4 = (() => {
           ctx.fillStyle = col + (.6 * a) + ')';
           ctx.fillRect(cxg + 1, ry + 1, colW - 2, rowH - 3);
           ctx.fillStyle = `rgba(255,255,255,${.95 * a})`;
-          ctx.font = 'bold 7px Courier New';
+          ctx.font = 'bold 7px ui-monospace, Menlo, Consolas, monospace';
           ctx.textAlign = 'center';
           ctx.fillText(activeStage.name, cxg + colW / 2, ry + rowH - 4);
         }
@@ -1306,12 +1309,12 @@ const L4 = (() => {
       ctx.fill();
       ctx.globalAlpha = 1;
       ctx.fillStyle = 'white';
-      ctx.font = 'bold 7px Courier New';
+      ctx.font = 'bold 7px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'center';
       ctx.fillText(cdb.tag, px, py + 2.5);
       ctx.fillStyle = cdb.cl;
       ctx.globalAlpha = .85 * a;
-      ctx.font = '8px Courier New';
+      ctx.font = '8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'center';
       ctx.fillText('CDB · ' + cdb.tag + ' = 0x' + cdb.value.toString(16).padStart(2, '0'), (fromX + toX) / 2, arcY - 4);
       ctx.globalAlpha = 1;
@@ -1335,7 +1338,7 @@ const L4 = (() => {
       ctx.fillStyle = `rgba(190,18,60,${.10 * fa * a})`;
       ctx.fillRect(sx, y0Top, wAvail, ganttY + 6 * 14 + 14 - y0Top);
       ctx.fillStyle = `rgba(190,18,60,${.9 * fa * a})`;
-      ctx.font = 'bold 13px Courier New';
+      ctx.font = 'bold 13px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'center';
       ctx.fillText('⚡ SQUASH — branch mispredict ⚡', sx + wAvail / 2, y0Top + 2);
     }
@@ -1362,7 +1365,7 @@ const L3 = (() => {
     const curState = Math.floor(t / 48) % fsmStates.length;
     sigs.forEach((s, i) => {
       const y = sy + i * rh;
-      ctx.fillStyle = ink(.45 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'right';
+      ctx.fillStyle = ink(.45 * a); ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'right';
       ctx.fillText(s.n, waveX - 10, y + rh * .5 + 4);
       if (s.n === 'STATE') {
         const segW = 72, clkOff = (t * 1.5) % segW, firstEdge = (segW - clkOff) % segW;
@@ -1377,7 +1380,7 @@ const L3 = (() => {
           ctx.fillStyle = stateColors[stIdx] + (.18 * a) + ')';
           ctx.fillRect(waveX + x0, topY, x1 - x0, botY - topY);
           ctx.fillStyle = stateColors[stIdx] + (0.9 * a) + ')';
-          ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'center';
+          ctx.font = 'bold 9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
           ctx.fillText(fsmStates[stIdx], waveX + (x0 + x1) / 2, y + rh * .54 + 3);
         }
         ctx.strokeStyle = ink(.6 * a); ctx.lineWidth = 1.5;
@@ -1414,10 +1417,10 @@ const L3 = (() => {
         }
       }
     });
-    ctx.fillStyle = ink(.22 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'left';
+    ctx.fillStyle = ink(.22 * a); ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left';
     ctx.fillText(`t=${Math.floor(t * 1.5)}ns  clk=100MHz  Artix-7`, waveX, sy + sigs.length * rh + 16);
     const fsmCX = W * .2, fsmCY = H * .5, fsmR = 78;
-    ctx.fillStyle = ink(.22 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'center';
+    ctx.fillStyle = ink(.22 * a); ctx.font = '9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
     ctx.fillText('FSM State Machine', fsmCX, fsmCY - fsmR - 16);
     if (curState !== prevState) { transitionDot = { fromState: prevState, toState: curState, prog: 0 }; prevState = curState; }
     if (transitionDot.prog < 1) transitionDot.prog += 0.06;
@@ -1427,7 +1430,7 @@ const L3 = (() => {
       ctx.fillStyle = active ? ink(.08 * a) : `rgba(244,244,245,${.8 * a})`;
       ctx.strokeStyle = active ? ink(.45 * a) : ink(.14 * a); ctx.lineWidth = active ? 1.5 : 1;
       ctx.beginPath(); ctx.arc(sx2, sy2, 18, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = active ? ink(.7 * a) : ink(.28 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'center';
+      ctx.fillStyle = active ? ink(.7 * a) : ink(.28 * a); ctx.font = '8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
       ctx.fillText(s, sx2, sy2 + 4);
     });
     fsmEdges.forEach(([from, to]) => {
@@ -1583,12 +1586,12 @@ const L2 = (() => {
 
     // ── Title + phase label ──
     ctx.fillStyle = ink(.5 * a);
-    ctx.font = 'bold 11px Courier New';
+    ctx.font = 'bold 11px ui-monospace, Menlo, Consolas, monospace';
     ctx.textAlign = 'left';
     ctx.fillText('4-bit Carry-Lookahead Adder · all carries in parallel', sx, sy - 12);
     const PHASE_LABELS = ['inputs', 'P,G — parallel', 'fan-in →', 'product terms', 'carries — parallel', 'sum — parallel', 'settled'];
     ctx.fillStyle = ink(.4 * a);
-    ctx.font = '9px Courier New';
+    ctx.font = '9px ui-monospace, Menlo, Consolas, monospace';
     ctx.textAlign = 'right';
     ctx.fillText('phase: ' + PHASE_LABELS[phase], sx + NATURAL_W, sy - 12);
 
@@ -1602,13 +1605,13 @@ const L2 = (() => {
       ctx.fillRect(PG_X, cellY, PG_W, PG_H);
       ctx.strokeRect(PG_X, cellY, PG_W, PG_H);
       ctx.fillStyle = ink(.55 * a);
-      ctx.font = 'bold 8px Courier New';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left';
       ctx.fillText('bit ' + i, PG_X + 4, cellY + 10);
       const aCol = ai && inputLit ? `rgba(29,78,216,${a})` : ink(.55 * a);
       const bCol = bi && inputLit ? `rgba(29,78,216,${a})` : ink(.55 * a);
       ctx.fillStyle = aCol;
-      ctx.font = '9px Courier New';
+      ctx.font = '9px ui-monospace, Menlo, Consolas, monospace';
       ctx.fillText('A' + i + '=' + ai, PG_X + 6, cellY + 26);
       ctx.fillStyle = bCol;
       ctx.fillText('B' + i + '=' + bi, PG_X + 6, cellY + 40);
@@ -1638,7 +1641,7 @@ const L2 = (() => {
       ctx.beginPath(); ctx.arc(bJx, bWY, 1.5, 0, Math.PI * 2); ctx.fill();
       // P, G output labels
       ctx.fillStyle = P[i] && pgLit ? `rgba(29,78,216,${.9 * a})` : ink(.4 * a);
-      ctx.font = 'bold 9px Courier New';
+      ctx.font = 'bold 9px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'right';
       ctx.fillText('P' + i + '=' + P[i], PG_X + PG_W - 4, cellY + 26);
       ctx.fillStyle = G[i] && pgLit ? `rgba(190,18,60,${.9 * a})` : ink(.4 * a);
@@ -1715,7 +1718,7 @@ const L2 = (() => {
       ctx.fillStyle = gCol;
       ctx.beginPath(); ctx.arc(gBus, gy, 1.8, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = pCol;
-      ctx.font = '6px Courier New';
+      ctx.font = '6px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'center';
       ctx.fillText('P' + i, pBus, py - 4);
       ctx.fillStyle = gCol;
@@ -1726,7 +1729,7 @@ const L2 = (() => {
       const c0Col = ink(.32 * a);
       wl(ctx, [[sigX.C0, blockTop], [sigX.C0, deepestY.C0]], c0Col, 1.2);
       ctx.fillStyle = ink(.5 * a);
-      ctx.font = 'bold 6px Courier New';
+      ctx.font = 'bold 6px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'center';
       ctx.fillText('C₀=0', sigX.C0, blockTop - 4);
     }
@@ -1739,7 +1742,7 @@ const L2 = (() => {
     ctx.fillRect(BLOCK_X, blockTop, BLOCK_W, BLOCK_H);
     ctx.strokeRect(BLOCK_X, blockTop, BLOCK_W, BLOCK_H);
     ctx.fillStyle = ink(.6 * a);
-    ctx.font = 'bold 9px Courier New';
+    ctx.font = 'bold 9px ui-monospace, Menlo, Consolas, monospace';
     ctx.textAlign = 'center';
     ctx.fillText('LOOKAHEAD BLOCK', BLOCK_X + BLOCK_W / 2, blockTop - 6);
 
@@ -1802,7 +1805,7 @@ const L2 = (() => {
           }
         });
         ctx.fillStyle = v && prodLit ? `rgba(126,34,206,${a})` : ink(.6 * a);
-        ctx.font = 'bold 8px Courier New';
+        ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
         ctx.textAlign = 'left';
         ctx.fillText(row.products[k].label, Math.round(andX + andW + 4), Math.round(andY + 9));
         // AND → OR: Manhattan-routed (horizontal + vertical only).
@@ -1822,7 +1825,7 @@ const L2 = (() => {
       const gActive = row.g && flowLit;
       const gWireY = andTop + numP * andSp + 6;
       ctx.fillStyle = gActive ? `rgba(190,18,60,${.88 * a})` : ink(.45 * a);
-      ctx.font = 'bold 8px Courier New';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left';
       ctx.fillText(row.gLabel, Math.round(sigX[row.gSig] + 4), Math.round(gWireY - 2));
       const gWireCol = gActive ? `rgba(190,18,60,${a})` : ink(.5 * a);
@@ -1850,7 +1853,7 @@ const L2 = (() => {
       ctx.fillRect(SUM_X, cellY, SUM_W, SUM_H);
       ctx.strokeRect(SUM_X, cellY, SUM_W, SUM_H);
       ctx.fillStyle = ink(.5 * a);
-      ctx.font = 'bold 8px Courier New';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left';
       ctx.fillText('S' + i, SUM_X + 4, cellY + 10);
       const xorX = SUM_X + 18, xorY = cellY + 14;
@@ -1858,7 +1861,7 @@ const L2 = (() => {
         S[i] && sumLit ? `rgba(21,128,61,${.55 * a})` : `rgba(255,255,255,${.95 * a})`,
         S[i] && sumLit ? `rgba(21,128,61,${a})` : ink(.5 * a));
       ctx.fillStyle = S[i] && sumLit ? `rgba(21,128,61,${a})` : ink(.6 * a);
-      ctx.font = 'bold 11px Courier New';
+      ctx.font = 'bold 11px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left';
       ctx.fillText('=' + S[i], SUM_X + 40, cellY + 24);
 
@@ -1867,7 +1870,7 @@ const L2 = (() => {
       const pCol = P[i] && pgLit ? `rgba(29,78,216,${a})` : ink(.55 * a);
       wl(ctx, [[SUM_X - 14, pInY], [xorX + 3, pInY]], pCol, 1.1);
       ctx.fillStyle = pCol;
-      ctx.font = 'bold 8px Courier New';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'right';
       ctx.fillText('P' + i + '=' + P[i], SUM_X - 2, Math.round(pInY + 3));
     }
@@ -1893,14 +1896,14 @@ const L2 = (() => {
         // Carry label sits OUTSIDE the Sum cell on the left, at the C input y —
         // mirrors the P label placement so they stack neatly without overlap.
         ctx.fillStyle = carryCol;
-        ctx.font = 'bold 8px Courier New';
+        ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
         ctx.textAlign = 'right';
         ctx.fillText(row.cLabel + '=' + row.result, SUM_X - 2, Math.round(xorBotInY + 3));
       } else {
         // C₄ = Cout — extends past the block with overflow label.
         wl(ctx, [[orTipX, orOutY], [carryOutX + 38, orOutY]], carryCol, 1.7);
         ctx.fillStyle = carryCol;
-        ctx.font = 'bold 9px Courier New';
+        ctx.font = 'bold 9px ui-monospace, Menlo, Consolas, monospace';
         ctx.textAlign = 'left';
         ctx.fillText('Cout=' + C4, carryOutX + 42, orOutY + 3);
       }
@@ -1911,7 +1914,7 @@ const L2 = (() => {
       const cellY0 = sy + 10;
       const xorBotInY = cellY0 + 14 + 9;
       ctx.fillStyle = ink(.55 * a);
-      ctx.font = 'bold 8px Courier New';
+      ctx.font = 'bold 8px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'right';
       ctx.fillText('C₀=0', SUM_X - 2, Math.round(xorBotInY + 3));
       wl(ctx, [[SUM_X - 14, xorBotInY], [SUM_X + 18 + 5, xorBotInY]], ink(.32 * a), 1.1);
@@ -1925,7 +1928,7 @@ const L2 = (() => {
     ctx.fillRect(sx, ry, NATURAL_W, 24);
     ctx.strokeRect(sx, ry, NATURAL_W, 24);
     ctx.fillStyle = ink(.55 * a);
-    ctx.font = '10px Courier New';
+    ctx.font = '10px ui-monospace, Menlo, Consolas, monospace';
     ctx.textAlign = 'center';
     const sumBin = (fullSum >>> 0).toString(2).padStart(5, '0');
     const aBitStr = [3, 2, 1, 0].map(j => (A >> j) & 1).join('');
@@ -1953,32 +1956,32 @@ const L1 = (() => {
     const cx2 = W * .42, cy = H / 2, sw = 250, sh = 155, sx = cx2 - sw / 2, sy = cy - sh / 2;
     ctx.fillStyle = `rgba(234,224,210,${.4 * a})`; ctx.strokeStyle = ink(.12 * a); ctx.lineWidth = 1;
     ctx.fillRect(sx, sy + sh * .35, sw, sh * .65); ctx.strokeRect(sx, sy + sh * .35, sw, sh * .65);
-    ctx.fillStyle = ink(.3 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'center'; ctx.fillText('p-substrate', cx2, sy + sh * .68);
+    ctx.fillStyle = ink(.3 * a); ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.fillText('p-substrate', cx2, sy + sh * .68);
     [[8, 56, 'n+ src'], [sw - 64, 56, 'n+ drn']].forEach(([ox, ow, lbl]) => {
       ctx.fillStyle = `rgba(186,220,255,${.5 * a})`; ctx.strokeStyle = ink(.18 * a); ctx.lineWidth = 1;
       ctx.fillRect(sx + (ox as number), sy + sh * .35, ow as number, sh * .27); ctx.strokeRect(sx + (ox as number), sy + sh * .35, ow as number, sh * .27);
-      ctx.fillStyle = ink(.4 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'center';
+      ctx.fillStyle = ink(.4 * a); ctx.font = '9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
       ctx.fillText(lbl as string, sx + (ox as number) + (ow as number) / 2, sy + sh * .35 + sh * .13 + 4);
     });
     ctx.fillStyle = `rgba(200,200,240,${.45 * a})`; ctx.strokeStyle = ink(.18 * a); ctx.lineWidth = 1;
     ctx.fillRect(sx + 64, sy + sh * .27, sw - 128, sh * .08); ctx.strokeRect(sx + 64, sy + sh * .27, sw - 128, sh * .08);
-    ctx.fillStyle = ink(.4 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'center'; ctx.fillText('SiO₂', cx2, sy + sh * .27 + sh * .04 + 4);
+    ctx.fillStyle = ink(.4 * a); ctx.font = '9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.fillText('SiO₂', cx2, sy + sh * .27 + sh * .04 + 4);
     ctx.fillStyle = `rgba(255,220,140,${.4 * a})`; ctx.strokeStyle = ink(.18 * a); ctx.lineWidth = 1;
     ctx.fillRect(sx + 64, sy + sh * .09, sw - 128, sh * .18); ctx.strokeRect(sx + 64, sy + sh * .09, sw - 128, sh * .18);
-    ctx.fillStyle = ink(.45 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'center';
+    ctx.fillStyle = ink(.45 * a); ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
     ctx.fillText(`gate  Vgs=${Vgs.toFixed(2)}V`, cx2, sy + sh * .18);
     const depthDepletionMax = sh * .15 * (Vgs / 1.5);
     ctx.fillStyle = `rgba(100,150,220,${.12 * a})`; ctx.fillRect(sx + 64, sy + sh * .35, sw - 128, depthDepletionMax);
     ctx.strokeStyle = `rgba(80,120,200,${.25 * a})`; ctx.lineWidth = 1; ctx.setLineDash([3, 2]);
     ctx.beginPath(); ctx.moveTo(sx + 64, sy + sh * .35 + depthDepletionMax); ctx.lineTo(sx + sw - 64, sy + sh * .35 + depthDepletionMax); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = ink(.25 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'center';
+    ctx.fillStyle = ink(.25 * a); ctx.font = '8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
     ctx.fillText('depletion', cx2, sy + sh * .35 + depthDepletionMax + 10);
     if (on) {
       const ch = sh * .04 * chan;
       ctx.fillStyle = `rgba(100,180,255,${.3 * chan * a})`; ctx.fillRect(sx + 64, sy + sh * .35, sw - 128, ch);
       ctx.strokeStyle = `rgba(60,130,220,${.4 * a})`; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
       ctx.beginPath(); ctx.moveTo(sx + 64, sy + sh * .35); ctx.lineTo(sx + sw - 64, sy + sh * .35); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = ink(.38 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'center';
+      ctx.fillStyle = ink(.38 * a); ctx.font = '9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
       ctx.fillText('inversion channel  e⁻→', cx2, sy + sh * .35 + ch + 12);
       const ne = Math.floor(5 * chan);
       for (let i = 0; i < ne; i++) {
@@ -1987,12 +1990,12 @@ const L1 = (() => {
         ctx.fillStyle = `rgba(40,120,210,${.55 * a})`; ctx.beginPath(); ctx.arc(ex, ey, 3, 0, Math.PI * 2); ctx.fill();
       }
     }
-    ctx.fillStyle = ink(.35 * a); ctx.font = '10px Courier New'; ctx.textAlign = 'center';
+    ctx.fillStyle = ink(.35 * a); ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
     ctx.fillText(on ? `Vgs=${Vgs.toFixed(2)}V > Vth=${Vth}V → channel OPEN` : `Vgs=${Vgs.toFixed(2)}V < Vth=${Vth}V → DEPLETED`, cx2, sy - 10);
     const bx = W * .65, by = H * .2, bw = W * .28, bh = H * .6;
     ctx.fillStyle = `rgba(248,248,250,${.85 * a})`; ctx.strokeStyle = ink(.12 * a); ctx.lineWidth = 1;
     ctx.fillRect(bx, by, bw, bh); ctx.strokeRect(bx, by, bw, bh);
-    ctx.fillStyle = ink(.3 * a); ctx.font = '9px Courier New'; ctx.textAlign = 'center'; ctx.fillText('Band Diagram', bx + bw / 2, by - 5);
+    ctx.fillStyle = ink(.3 * a); ctx.font = '9px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.fillText('Band Diagram', bx + bw / 2, by - 5);
     const bend = on ? chan * 0.18 : 0;
     ctx.fillStyle = `rgba(180,180,190,${.06 * a})`;
     ctx.beginPath();
@@ -2029,16 +2032,16 @@ const L1 = (() => {
       x === 0 ? ctx.moveTo(bx + x, efY) : ctx.lineTo(bx + x, efY);
     }
     ctx.stroke();
-    ctx.fillStyle = `rgba(29,78,216,${.55 * a})`; ctx.font = '8px Courier New'; ctx.textAlign = 'right'; ctx.fillText('Ec', bx + bw - 4, by + bh * .25 - 3);
+    ctx.fillStyle = `rgba(29,78,216,${.55 * a})`; ctx.font = '8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'right'; ctx.fillText('Ec', bx + bw - 4, by + bh * .25 - 3);
     ctx.fillStyle = `rgba(126,34,206,${.55 * a})`; ctx.fillText('Ev', bx + bw - 4, by + bh * .65 - 3);
     ctx.fillStyle = `rgba(180,83,9,${.5 * a})`; ctx.fillText('Ef', bx + bw - 4, by + bh * .45 - 3);
-    if (on) { ctx.fillStyle = `rgba(40,120,210,${.4 * a})`; ctx.font = '8px Courier New'; ctx.textAlign = 'center'; ctx.fillText('inversion', bx + bw / 2, by + bh * .32); }
+    if (on) { ctx.fillStyle = `rgba(40,120,210,${.4 * a})`; ctx.font = '8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.fillText('inversion', bx + bw / 2, by + bh * .32); }
 
     // ── Id-Vgs sweep curve (compact overlay under the MOSFET) ──
     const ivX = sx, ivY = sy + sh + 28, ivW = sw, ivH = 76;
     ctx.fillStyle = `rgba(248,248,250,${.85 * a})`; ctx.strokeStyle = ink(.12 * a); ctx.lineWidth = 1;
     ctx.fillRect(ivX, ivY, ivW, ivH); ctx.strokeRect(ivX, ivY, ivW, ivH);
-    ctx.fillStyle = ink(.32 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
+    ctx.fillStyle = ink(.32 * a); ctx.font = '8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left';
     ctx.fillText('Id vs Vgs', ivX + 6, ivY + 11);
     ctx.fillStyle = ink(.22 * a); ctx.textAlign = 'right';
     ctx.fillText('Vth=' + Vth + 'V', ivX + ivW - 6, ivY + 11);
@@ -2050,7 +2053,7 @@ const L1 = (() => {
     const vthX = plotX + (Vth / 2) * plotW;
     ctx.strokeStyle = `rgba(190,18,60,${.3 * a})`; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
     ctx.beginPath(); ctx.moveTo(vthX, plotY); ctx.lineTo(vthX, plotY + plotH); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = `rgba(190,18,60,${.45 * a})`; ctx.font = '7px Courier New'; ctx.textAlign = 'center';
+    ctx.fillStyle = `rgba(190,18,60,${.45 * a})`; ctx.font = '7px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center';
     ctx.fillText('Vth', vthX, plotY - 3);
     // Id curve (square law beyond Vth, ~0 below).
     const idAt = (vgs: number) => { const ov = Math.max(0, vgs - Vth); return ov * ov * .9; };
@@ -2065,7 +2068,7 @@ const L1 = (() => {
     }
     ctx.stroke();
     // Axis labels
-    ctx.fillStyle = ink(.3 * a); ctx.font = '7px Courier New'; ctx.textAlign = 'right';
+    ctx.fillStyle = ink(.3 * a); ctx.font = '7px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'right';
     ctx.fillText('Id', plotX - 3, plotY + 6);
     ctx.textAlign = 'center';
     ctx.fillText('Vgs', plotX + plotW / 2, plotY + plotH + 11);
@@ -2085,7 +2088,7 @@ const L1 = (() => {
     ctx.fillStyle = `rgba(29,78,216,${.95 * a})`;
     ctx.beginPath(); ctx.arc(markX, markY, 2.5, 0, Math.PI * 2); ctx.fill();
     // Current readout
-    ctx.fillStyle = ink(.45 * a); ctx.font = '8px Courier New'; ctx.textAlign = 'left';
+    ctx.fillStyle = ink(.45 * a); ctx.font = '8px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left';
     ctx.fillText('Id=' + idAt(Vgs).toFixed(2) + 'mA', markX + 6, markY - 4);
 
     ctx.restore();
@@ -2109,462 +2112,130 @@ export function setHeroHover(idx: number) { heroHover = idx; }
 export function getHeroHover() { return heroHover; }
 
 const HERO_BG = (() => {
-  let t = 0;
+  // Drafting-desk scene: warm graph-paper grid with faint ink schematic
+  // doodles in the margins — the notebook hero card sits on top of it.
+  // Static by design; the only motion is the camera dive StackClient
+  // applies on scroll. No hotspots (hotspotsFn stays null), so the hero
+  // links row is the single source of truth for resume/contact.
+  const dk = () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
-  // Mouse cursor — follows a slow Bezier path between random targets.
-  let curX = .55, curY = .35;
-  let curTx = .72, curTy = .55;
-  let curT = 0, curDuration = 200;
-
-  // Notifications — toast appears top-right occasionally. Tied to real engineering work.
-  const NOTIFS = [
-    '✓  Training run #47 converged · loss 0.041',
-    '↓  Pull request #42 merged into main',
-    '⚡ Vivado synth done · 100 MHz timing closure',
-    '◐  gem5 SPEC2017 simulation finished',
-    '✓  CUDA kernel benchmark · 2.3 TFLOPS',
-    '⌥  Code review requested · cuda-mccfr',
-  ];
-  let notifIdx = -1, notifShownAt = -9999;
-
-  // Dock icons preview the L7 → L1 journey.
-  type DockApp = { lbl: string; col: string; sub: string };
-  const DOCK: DockApp[] = [
-    { lbl: 'NN',  col: '#1d4ed8', sub: 'L7' },
-    { lbl: 'TCP', col: '#0891b2', sub: 'L6' },
-    { lbl: 'C',   col: '#7e22ce', sub: 'L5' },
-    { lbl: 'µP',  col: '#b45309', sub: 'L4' },
-    { lbl: 'RTL', col: '#0d9488', sub: 'L3' },
-    { lbl: '&',   col: '#15803d', sub: 'L2' },
-    { lbl: 'Si',  col: '#be123c', sub: 'L1' },
-  ];
-
-  // Desktop file/folder icons — real projects from the portfolio.
-  // `url` makes the icon clickable in StackClient: external URLs open in a new tab,
-  // anchors (#sec-l4) scroll to the matching section.
-  type DeskIcon = { x: number; y: number; lbl: string; kind: 'folder' | 'file'; url?: string };
-  const DESK: DeskIcon[] = [
-    { x: .92, y: .12, lbl: 'cuda-mccfr',    kind: 'folder', url: 'https://github.com/ericchen8231/cuda-mccfr' },
-    { x: .92, y: .27, lbl: 'rankify',       kind: 'folder', url: '#sec-l7' },
-    { x: .92, y: .42, lbl: 'resume.pdf',    kind: 'file',   url: '/personal-website/resume.pdf' },
-    { x: .92, y: .57, lbl: 'gem5-research', kind: 'folder', url: '#sec-l4' },
-    { x: .80, y: .12, lbl: 'MUJI-intern',   kind: 'folder', url: '#sec-l7' },
-    { x: .80, y: .27, lbl: 'thesis.pdf',    kind: 'file',   url: '#sec-l4' },
-  ];
-  // Hotspot helpers: getHeroHotspots returns clickable rects in *screen* coords
-  // (accounts for the camera dive zoom applied by StackClient at draw time).
-  // setHeroHover lets StackClient drive the hover-ring rendering.
-  function iconBounds(d: DeskIcon, W: number, H: number) {
-    const w0 = d.kind === 'folder' ? 50 : 38;
-    const h0 = d.kind === 'folder' ? 40 : 46;
-    const ix = d.x * W - 28, iy = d.y * H - 22;
-    // Bbox is generous: includes a small pad plus the label below.
-    return { x: ix - 4, y: iy - 2, w: w0 + 8, h: h0 + 18 };
-  }
-  hotspotsFn = function (W: number, H: number, scrollY: number) {
-    const heroProg = Math.min(1, Math.max(0, scrollY / H));
-    const heroEased = Math.sqrt(heroProg);
-    const zoom = 1 + heroEased * 1.4;
-    const cx = W / 2, cy = H / 2;
-    return DESK.flatMap((d, idx) => {
-      if (!d.url) return [] as ReturnType<typeof toHot>[];
-      const b = iconBounds(d, W, H);
-      return [toHot(idx, b.x, b.y, b.w, b.h, zoom, cx, cy, d.url, d.lbl)];
-    });
-  };
-  function toHot(idx: number, x: number, y: number, w: number, h: number, zoom: number, cx: number, cy: number, url: string, label: string) {
-    return {
-      idx,
-      x: cx + (x - cx) * zoom,
-      y: cy + (y - cy) * zoom,
-      w: w * zoom,
-      h: h * zoom,
-      url, label,
-    };
-  }
-
-  // Rounded rect helper (handles browsers without ctx.roundRect).
-  function rrect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
-    const rr = Math.min(r, w / 2, h / 2);
+  function mosfet(ctx: Ctx, x: number, y: number, s: number) {
     ctx.beginPath();
-    ctx.moveTo(x + rr, y);
-    ctx.lineTo(x + w - rr, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
-    ctx.lineTo(x + w, y + h - rr);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
-    ctx.lineTo(x + rr, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
-    ctx.lineTo(x, y + rr);
-    ctx.quadraticCurveTo(x, y, x + rr, y);
-    ctx.closePath();
-  }
-
-  // macOS-ish folder icon: rounded body with folded "tab" at top.
-  function drawFolder(ctx: Ctx, x: number, y: number, w: number, h: number, alpha: number, glow: number) {
-    const tabH = h * 0.18, tabW = w * 0.4;
-    // Outer glow when focused.
-    if (glow > 0.01) {
-      ctx.save();
-      const gr = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, Math.max(w, h));
-      gr.addColorStop(0, `rgba(59,130,246,${0.45 * glow * alpha})`);
-      gr.addColorStop(0.5, `rgba(59,130,246,${0.18 * glow * alpha})`);
-      gr.addColorStop(1, 'rgba(59,130,246,0)');
-      ctx.fillStyle = gr;
-      ctx.fillRect(x - w * 0.4, y - h * 0.4, w * 1.8, h * 1.8);
-      ctx.restore();
-    }
-    // Folder back (darker)
-    ctx.fillStyle = `rgba(96,150,220,${0.85 * alpha})`;
-    rrect(ctx, x, y + tabH * 0.45, w, h - tabH * 0.45, h * 0.08);
-    ctx.fill();
-    // Folded tab
-    ctx.fillStyle = `rgba(80,135,205,${0.9 * alpha})`;
-    rrect(ctx, x + 2, y, tabW, tabH + 4, h * 0.06);
-    ctx.fill();
-    // Folder front (lighter, slight overlap with tab)
-    const grad = ctx.createLinearGradient(x, y + tabH, x, y + h);
-    grad.addColorStop(0, `rgba(132,180,235,${0.96 * alpha})`);
-    grad.addColorStop(1, `rgba(96,148,210,${0.96 * alpha})`);
-    ctx.fillStyle = grad;
-    rrect(ctx, x, y + tabH, w, h - tabH, h * 0.08);
-    ctx.fill();
-    // Highlight stroke
-    ctx.strokeStyle = `rgba(255,255,255,${0.35 * alpha})`;
-    ctx.lineWidth = 1;
-    rrect(ctx, x + 1, y + tabH + 1, w - 2, h - tabH - 2, h * 0.08);
-    ctx.stroke();
-    // Outline
-    ctx.strokeStyle = `rgba(40,80,140,${0.5 * alpha})`;
-    ctx.lineWidth = 1;
-    rrect(ctx, x, y + tabH, w, h - tabH, h * 0.08);
+    ctx.moveTo(x - s, y); ctx.lineTo(x - s * .25, y);
+    ctx.moveTo(x - s * .25, y - s * .55); ctx.lineTo(x - s * .25, y + s * .55);
+    ctx.moveTo(x, y - s * .6); ctx.lineTo(x, y + s * .6);
+    ctx.moveTo(x, y - s * .5); ctx.lineTo(x + s * .55, y - s * .5); ctx.lineTo(x + s * .55, y - s);
+    ctx.moveTo(x, y + s * .5); ctx.lineTo(x + s * .55, y + s * .5); ctx.lineTo(x + s * .55, y + s);
     ctx.stroke();
   }
 
-  // Generic doc/file icon.
-  function drawFile(ctx: Ctx, x: number, y: number, w: number, h: number, alpha: number) {
-    const fold = w * 0.28;
-    ctx.fillStyle = `rgba(252,252,254,${0.95 * alpha})`;
-    ctx.strokeStyle = `rgba(80,90,110,${0.55 * alpha})`;
-    ctx.lineWidth = 1;
+  function resistor(ctx: Ctx, x: number, y: number, s: number) {
+    const u = s / 8;
     ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w - fold, y);
-    ctx.lineTo(x + w, y + fold);
-    ctx.lineTo(x + w, y + h);
-    ctx.lineTo(x, y + h);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    // Folded corner
-    ctx.fillStyle = `rgba(220,224,232,${0.9 * alpha})`;
-    ctx.beginPath();
-    ctx.moveTo(x + w - fold, y);
-    ctx.lineTo(x + w - fold, y + fold);
-    ctx.lineTo(x + w, y + fold);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    // Lines of "text"
-    ctx.strokeStyle = `rgba(160,170,185,${0.65 * alpha})`;
-    for (let i = 0; i < 4; i++) {
-      const ly = y + fold + 8 + i * 7;
-      if (ly > y + h - 6) break;
-      ctx.beginPath(); ctx.moveTo(x + 6, ly); ctx.lineTo(x + w - 6, ly - i * .5); ctx.stroke();
-    }
+    ctx.moveTo(x, y); ctx.lineTo(x + u * 1.5, y);
+    ctx.lineTo(x + u * 2, y - u); ctx.lineTo(x + u * 3, y + u);
+    ctx.lineTo(x + u * 4, y - u); ctx.lineTo(x + u * 5, y + u);
+    ctx.lineTo(x + u * 6, y - u); ctx.lineTo(x + u * 6.5, y);
+    ctx.lineTo(x + u * 8, y);
+    ctx.stroke();
   }
 
-  return function draw(ctx: Ctx, vpW: number, vpH: number, a: number) {
-    t++;
-    const sp = Math.max(0, Math.min(1, heroScroll));
+  function opamp(ctx: Ctx, x: number, y: number, s: number) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - s * .6); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s * .6); ctx.closePath();
+    ctx.moveTo(x - s * .4, y - s * .3); ctx.lineTo(x, y - s * .3);
+    ctx.moveTo(x - s * .4, y + s * .3); ctx.lineTo(x, y + s * .3);
+    ctx.moveTo(x + s, y); ctx.lineTo(x + s * 1.4, y);
+    ctx.stroke();
+    ctx.font = `${Math.round(s * .32)}px ui-monospace, Menlo, Consolas, monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('−', x + s * .08, y - s * .2);
+    ctx.fillText('+', x + s * .08, y + s * .42);
+  }
 
-    // ── Laptop frame geometry ──
-    // Generous margins so the laptop reads as "zoomed out on a desk."
-    // As the user scrolls, the camera zoom scales the whole canvas until the
-    // bezel/desk exits the viewport and the screen content fills the page.
-    const bzlMx = Math.max(60, vpW * 0.13);
-    const bzlMyTop = Math.max(40, vpH * 0.09);
-    const bzlMyBot = Math.max(72, vpH * 0.18);
-    const sX = bzlMx, sY = bzlMyTop;
-    const sW = vpW - 2 * bzlMx;
-    const sH = vpH - bzlMyTop - bzlMyBot;
+  function inverter(ctx: Ctx, x: number, y: number, s: number) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - s * .5); ctx.lineTo(x + s * .85, y); ctx.lineTo(x, y + s * .5); ctx.closePath();
+    ctx.moveTo(x - s * .35, y); ctx.lineTo(x, y);
+    ctx.moveTo(x + s * 1.05, y); ctx.lineTo(x + s * 1.4, y);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(x + s * .95, y, s * .1, 0, Math.PI * 2); ctx.stroke();
+  }
 
-    // ── 1. Outer "room" / desk background — soft warm gray, easy on the eyes ──
-    {
-      const grad = ctx.createLinearGradient(0, 0, 0, vpH);
-      grad.addColorStop(0, `rgba(228,232,240,${0.92 * a})`);
-      grad.addColorStop(0.6, `rgba(212,218,228,${0.9 * a})`);
-      grad.addColorStop(1, `rgba(196,204,216,${0.92 * a})`);
-      ctx.fillStyle = grad; ctx.fillRect(0, 0, vpW, vpH);
-    }
+  function dimension(ctx: Ctx, x: number, y: number, w: number) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - 5); ctx.lineTo(x, y + 5);
+    ctx.moveTo(x + w, y - 5); ctx.lineTo(x + w, y + 5);
+    ctx.moveTo(x, y); ctx.lineTo(x + w, y);
+    ctx.moveTo(x + 4, y - 2.5); ctx.lineTo(x, y); ctx.lineTo(x + 4, y + 2.5);
+    ctx.moveTo(x + w - 4, y - 2.5); ctx.lineTo(x + w, y); ctx.lineTo(x + w - 4, y + 2.5);
+    ctx.stroke();
+  }
 
-    // ── 2. Laptop bezel — silver/aluminum-style, more distinct ──
-    {
-      const bX = sX - 10, bY = sY - 10, bW = sW + 20, bH = sH + 20;
-      // Soft outer shadow under the laptop.
-      ctx.save();
-      ctx.shadowColor = 'rgba(40,50,70,0.30)';
-      ctx.shadowBlur = 30;
-      ctx.shadowOffsetY = 14;
-      ctx.fillStyle = `rgba(180,188,200,${0.98 * a})`;
-      rrect(ctx, bX, bY, bW, bH, 14); ctx.fill();
-      ctx.restore();
-      // Bezel surface gradient (silver).
-      const bg = ctx.createLinearGradient(0, bY, 0, bY + bH);
-      bg.addColorStop(0, `rgba(208,214,224,${a})`);
-      bg.addColorStop(0.5, `rgba(184,192,206,${a})`);
-      bg.addColorStop(1, `rgba(160,170,184,${a})`);
-      ctx.fillStyle = bg;
-      rrect(ctx, bX, bY, bW, bH, 14); ctx.fill();
-      // Inner rim highlight (just inside the screen — slightly darker line on silver).
-      ctx.strokeStyle = `rgba(80,95,115,${0.35 * a})`;
-      ctx.lineWidth = 1;
-      rrect(ctx, sX - 1, sY - 1, sW + 2, sH + 2, 6); ctx.stroke();
-      // Camera notch (top-center sensor housing).
-      const notchW = Math.min(160, sW * 0.18), notchH = 6;
-      const notchX = sX + sW / 2 - notchW / 2;
-      ctx.fillStyle = `rgba(60,68,84,${a})`;
-      rrect(ctx, notchX, sY - 0.5, notchW, notchH, 3); ctx.fill();
-      // Webcam dot.
-      ctx.fillStyle = `rgba(200,60,60,${0.7 * a})`;
-      ctx.beginPath(); ctx.arc(notchX + notchW / 2, sY + notchH / 2, 1.2, 0, Math.PI * 2); ctx.fill();
-    }
+  function coffeeRing(ctx: Ctx, x: number, y: number, r: number) {
+    ctx.beginPath(); ctx.arc(x, y, r, 0.2, Math.PI * 1.75); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x + 2, y + 1, r - 2.5, Math.PI * 0.6, Math.PI * 2.2); ctx.stroke();
+  }
 
-    // ── 3. Laptop body / hinge hint below the screen — silver tones ──
-    {
-      const hY = sY + sH + 10;
-      const hH = bzlMyBot - 10;
-      // Hinge strip.
-      const hg = ctx.createLinearGradient(0, hY, 0, hY + 8);
-      hg.addColorStop(0, `rgba(170,180,194,${a})`);
-      hg.addColorStop(1, `rgba(132,142,158,${a})`);
-      ctx.fillStyle = hg;
-      ctx.fillRect(sX - 14, hY, sW + 28, 6);
-      // Body keyboard deck (trapezoidal hint, lighter silver gradient).
-      ctx.beginPath();
-      ctx.moveTo(sX - 30, hY + 6);
-      ctx.lineTo(sX + sW + 30, hY + 6);
-      ctx.lineTo(sX + sW + 60, hY + hH);
-      ctx.lineTo(sX - 60, hY + hH);
-      ctx.closePath();
-      const dg = ctx.createLinearGradient(0, hY + 6, 0, hY + hH);
-      dg.addColorStop(0, `rgba(196,204,218,${a})`);
-      dg.addColorStop(1, `rgba(152,162,180,${a})`);
-      ctx.fillStyle = dg; ctx.fill();
-      ctx.strokeStyle = `rgba(60,72,90,${0.5 * a})`; ctx.lineWidth = 1; ctx.stroke();
-      // Subtle apple-logo-ish dot at the deck center.
-      ctx.fillStyle = `rgba(60,72,90,${0.45 * a})`;
-      ctx.beginPath(); ctx.arc(sX + sW / 2, hY + 6 + hH * 0.4, 3, 0, Math.PI * 2); ctx.fill();
-    }
-
-    // ── 4. Enter the screen: clip everything below to the screen rect ──
+  return function draw(ctx: Ctx, W: number, H: number, a: number) {
+    const dark = dk();
     ctx.save();
-    rrect(ctx, sX, sY, sW, sH, 6);
-    ctx.clip();
-    // Switch to screen-local coordinate space (origin at top-left of screen).
-    ctx.translate(sX, sY);
-    const W = sW, H = sH;
+    ctx.globalAlpha = a;
 
-    // Wallpaper: bright sky-blue gradient with a warm horizon — easier on the eyes.
-    {
-      const cxw = W * 0.62, cyw = H * 0.45;
-      const grad = ctx.createRadialGradient(cxw, cyw, 0, cxw, cyw, Math.max(W, H));
-      grad.addColorStop(0, `rgba(170,210,250,${0.95 * a})`);
-      grad.addColorStop(0.45, `rgba(120,170,225,${0.95 * a})`);
-      grad.addColorStop(1, `rgba(80,130,195,${0.95 * a})`);
-      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
-      // Warm horizon glow at bottom-right.
-      const g2 = ctx.createRadialGradient(W * 0.75, H * 0.85, 0, W * 0.75, H * 0.85, W * 0.6);
-      g2.addColorStop(0, `rgba(255,210,160,${0.32 * a})`);
-      g2.addColorStop(1, 'rgba(255,210,160,0)');
-      ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
-    }
+    // Desk surface — a step darker than the hero paper so the card reads.
+    ctx.fillStyle = dark ? '#17130e' : '#eee7d5';
+    ctx.fillRect(0, 0, W, H);
 
-    // ── 2. Top menu bar ──
-    const mbH = 24;
-    ctx.fillStyle = `rgba(245,248,253,${0.78 * a})`;
-    ctx.fillRect(0, 0, W, mbH);
-    ctx.strokeStyle = `rgba(60,80,110,${0.18 * a})`;
+    // Graph-paper grid: minor every 28px, major every 140px.
+    const minor = dark ? 'rgba(236,229,214,0.05)' : 'rgba(154,143,110,0.15)';
+    const major = dark ? 'rgba(236,229,214,0.10)' : 'rgba(154,143,110,0.26)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, mbH + .5); ctx.lineTo(W, mbH + .5); ctx.stroke();
-    ctx.fillStyle = `rgba(28,38,58,${0.92 * a})`;
-    ctx.font = 'bold 13px Courier New'; ctx.textAlign = 'left';
-    ctx.fillText('◉', 16, 17);
-    ctx.font = 'bold 11px Courier New';
-    ctx.fillText('Finder', 36, 16);
-    ctx.fillStyle = `rgba(60,75,100,${0.85 * a})`;
-    ctx.font = '11px Courier New';
-    {
-      let mbItemX = 96;
-      const menuGap = 22;
-      for (const it of ['File', 'Edit', 'View', 'Go', 'Window', 'Help']) {
-        ctx.fillText(it, mbItemX, 16);
-        mbItemX += ctx.measureText(it).width + menuGap;
-      }
+    for (let gx = 0; gx <= W; gx += 28) {
+      ctx.strokeStyle = gx % 140 === 0 ? major : minor;
+      ctx.beginPath(); ctx.moveTo(gx + .5, 0); ctx.lineTo(gx + .5, H); ctx.stroke();
     }
-    // Right side: status + real clock
-    const now = new Date();
-    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const day = dayLabels[now.getDay()];
-    const hh12 = (now.getHours() % 12) || 12;
-    const mm2 = now.getMinutes().toString().padStart(2, '0');
-    const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
-    ctx.fillStyle = `rgba(40,52,76,${0.92 * a})`;
-    ctx.textAlign = 'right'; ctx.font = '11px Courier New';
-    ctx.fillText(`${day}  ${hh12}:${mm2} ${ampm}`, W - 16, 16);
-    ctx.font = 'bold 11px Courier New';
-    ctx.fillText('▮▮▮', W - 116, 16);
-    ctx.fillText('⌃', W - 144, 16);
-
-    // ── 3. Scattered desktop icons on the wallpaper ──
-    // These fade out as you scroll (the focal folder takes over).
-    const deskAlpha = a * (1 - sp * 0.85);
-    if (deskAlpha > 0.02) {
-      DESK.forEach((d, idx) => {
-        const ix = d.x * W - 28, iy = d.y * H - 22;
-        const w0 = d.kind === 'folder' ? 50 : 38;
-        const h0 = d.kind === 'folder' ? 40 : 46;
-        const isHov = heroHover === idx && d.url !== undefined;
-        // Selection ring behind the icon when hovered (mimics macOS Finder selection).
-        if (isHov) {
-          ctx.fillStyle = `rgba(59,130,246,${0.22 * deskAlpha})`;
-          rrect(ctx, ix - 6, iy - 6, w0 + 12, h0 + 18, 7);
-          ctx.fill();
-          ctx.strokeStyle = `rgba(59,130,246,${0.8 * deskAlpha})`;
-          ctx.lineWidth = 1.5;
-          rrect(ctx, ix - 6, iy - 6, w0 + 12, h0 + 18, 7);
-          ctx.stroke();
-        }
-        if (d.kind === 'folder') drawFolder(ctx, ix, iy, 50, 40, deskAlpha, isHov ? 0.6 : 0);
-        else drawFile(ctx, ix, iy, 38, 46, deskAlpha);
-        // Label with a small dark shadow background so it reads on the bright wallpaper.
-        ctx.fillStyle = isHov
-          ? `rgba(255,255,255,${0.98 * deskAlpha})`
-          : `rgba(20,30,48,${0.85 * deskAlpha})`;
-        if (isHov) {
-          // Solid blue label pill for the hovered icon.
-          const lblW = Math.max(48, d.lbl.length * 6 + 10);
-          ctx.fillStyle = `rgba(37,99,235,${0.92 * deskAlpha})`;
-          rrect(ctx, d.x * W - lblW / 2, d.y * H + 22, lblW, 14, 3);
-          ctx.fill();
-          ctx.fillStyle = `rgba(255,255,255,${0.98 * deskAlpha})`;
-        }
-        ctx.font = 'bold 10px Courier New'; ctx.textAlign = 'center';
-        ctx.fillText(d.lbl, d.x * W, d.y * H + 32);
-      });
+    for (let gy = 0; gy <= H; gy += 28) {
+      ctx.strokeStyle = gy % 140 === 0 ? major : minor;
+      ctx.beginPath(); ctx.moveTo(0, gy + .5); ctx.lineTo(W, gy + .5); ctx.stroke();
     }
 
-    // ── 4. Focal folder — the zoom target ──
-    // Position fixed on the camera's zoom origin so the camera dives directly into it.
-    // (The bg-canvas applies the camera zoom around (W+L_OFF-R_OFF)/2 in viewport coords;
-    //  since we draw at full viewport here, that point is W/2 - 137. Use a near-equivalent
-    //  fraction of W to stay responsive.)
-    const focalCx = W * 0.62, focalCy = H * 0.46;
-    // Base size + extra growth driven by scroll progress (sp is 0..1 across the hero).
-    const folderBase = Math.min(W, H) * 0.16;
-    const growth = 1 + sp * 0.9;
-    const fW = folderBase * 1.35 * growth, fH = folderBase * growth;
-    const fX = focalCx - fW / 2, fY = focalCy - fH / 2;
-    // Pulsing focus glow.
-    const focusPulse = 0.55 + 0.45 * Math.sin(t * 0.04);
-    drawFolder(ctx, fX, fY, fW, fH, a, focusPulse);
-    // Label below.
-    if (sp < 0.5) {
-      const labelAlpha = a * (1 - sp * 2);
-      ctx.fillStyle = `rgba(20,30,48,${0.95 * labelAlpha})`;
-      ctx.font = `bold ${Math.round(13 + sp * 6)}px Courier New`;
-      ctx.textAlign = 'center';
-      ctx.fillText('the_machine/', focalCx, fY + fH + 22);
-      ctx.fillStyle = `rgba(40,55,85,${0.8 * labelAlpha})`;
-      ctx.font = '10px Courier New';
-      ctx.fillText('scroll ↓ to dive in', focalCx, fY + fH + 38);
-    }
-    // When deep into the scroll, show "contents" emerging from the folder
-    // (gives the impression of the folder opening into the L7 view).
-    if (sp > 0.4) {
-      const openAlpha = (sp - 0.4) / 0.5;
-      const ringR = fW * 0.5 * (1 + openAlpha * 0.6);
-      ctx.save();
-      ctx.globalAlpha = Math.min(1, openAlpha) * a * 0.6;
-      const g3 = ctx.createRadialGradient(focalCx, focalCy, 0, focalCx, focalCy, ringR);
-      g3.addColorStop(0, 'rgba(120,170,240,0.7)');
-      g3.addColorStop(0.6, 'rgba(60,110,200,0.4)');
-      g3.addColorStop(1, 'rgba(40,70,150,0)');
-      ctx.fillStyle = g3;
-      ctx.beginPath(); ctx.arc(focalCx, focalCy, ringR, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    }
+    // Ink doodles — kept out of the terminal panel (right 340px on desktop)
+    // and mostly clear of the hero card, which occupies the left ~680px.
+    const rEdge = W > 900 ? W - 340 : W;
+    const ink = dark ? 'rgba(207,198,178,0.32)' : 'rgba(107,95,67,0.38)';
+    const inkDim = dark ? 'rgba(207,198,178,0.18)' : 'rgba(107,95,67,0.22)';
+    const stain = dark ? 'rgba(201,169,122,0.10)' : 'rgba(176,105,58,0.14)';
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const label = (txt: string, x: number, y: number) => {
+      ctx.fillStyle = inkDim;
+      ctx.font = '10px ui-monospace, Menlo, Consolas, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(txt, x, y);
+    };
 
-    // ── 5. Mouse cursor — wanders broadly, lightly biased toward the folder ──
-    curT++;
-    if (curT >= curDuration) {
-      curX = curTx; curY = curTy;
-      // 30% near the focal folder, 70% broad wander.
-      const pick = Math.random();
-      if (pick < 0.3) {
-        curTx = 0.62 + (Math.random() - 0.5) * 0.22;
-        curTy = 0.46 + (Math.random() - 0.5) * 0.20;
-      } else {
-        curTx = .25 + Math.random() * .60;
-        curTy = .25 + Math.random() * .55;
-      }
-      curT = 0; curDuration = 140 + Math.floor(Math.random() * 200);
-    } else {
-      const u = curT / curDuration;
-      const ease = u < .5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
-      curX = curX + (curTx - curX) * ease * .03;
-      curY = curY + (curTy - curY) * ease * .03;
-    }
-    {
-      const mx = curX * W, my = curY * H;
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.4)';
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1;
-      ctx.fillStyle = `rgba(255,255,255,${0.98 * a})`;
-      ctx.strokeStyle = `rgba(20,30,50,${0.95 * a})`;
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(mx, my);
-      ctx.lineTo(mx, my + 17);
-      ctx.lineTo(mx + 4.5, my + 13);
-      ctx.lineTo(mx + 7.5, my + 19);
-      ctx.lineTo(mx + 9.5, my + 18);
-      ctx.lineTo(mx + 6.5, my + 12);
-      ctx.lineTo(mx + 11.5, my + 12);
-      ctx.closePath();
-      ctx.fill(); ctx.stroke();
-      ctx.restore();
-    }
+    ctx.strokeStyle = ink; ctx.fillStyle = ink; ctx.lineWidth = 1.2;
+    mosfet(ctx, rEdge - 130, H * .24, 26);
+    label('fig. 2 — nmos, Vth ≈ 1.1 V', rEdge - 172, H * .24 + 48);
 
-    // ── 7. Notification toast (top-right) ──
-    const notifGap = 720;
-    if (t - notifShownAt > notifGap) {
-      notifShownAt = t;
-      notifIdx = (notifIdx + 1) % NOTIFS.length;
-    }
-    const notifAge = t - notifShownAt;
-    const notifLife = 200;
-    if (notifAge < notifLife) {
-      const u = notifAge / notifLife;
-      const op = u < .15 ? u / .15 : u > .85 ? (1 - u) / .15 : 1;
-      const slide = u < .15 ? (1 - u / .15) * 24 : 0;
-      const nW = 240, nH = 40;
-      const nX = W - nW - 20 + slide, nY = mbH + 16;
-      ctx.save();
-      ctx.globalAlpha = op * a;
-      ctx.shadowColor = 'rgba(0,0,0,0.35)';
-      ctx.shadowBlur = 12;
-      ctx.shadowOffsetY = 4;
-      ctx.fillStyle = 'rgba(252,253,254,0.96)';
-      rrect(ctx, nX, nY, nW, nH, 10); ctx.fill();
-      ctx.restore();
-      ctx.strokeStyle = `rgba(255,255,255,${0.25 * op * a})`;
-      ctx.lineWidth = 1;
-      rrect(ctx, nX, nY, nW, nH, 10); ctx.stroke();
-      ctx.fillStyle = `rgba(30,38,55,${op * a})`;
-      ctx.font = 'bold 11px Courier New'; ctx.textAlign = 'left';
-      ctx.fillText(NOTIFS[notifIdx], nX + 14, nY + 25);
-    }
+    ctx.strokeStyle = ink; ctx.fillStyle = ink;
+    opamp(ctx, rEdge - 150, H * .56, 30);
+    label('fig. 3 — gm/ID', rEdge - 152, H * .56 + 34);
 
-    // ── Exit the clipped/translated screen space. ──
+    ctx.strokeStyle = ink;
+    resistor(ctx, rEdge - 260, H * .8, 64);
+    label('R = V / I', rEdge - 244, H * .8 + 22);
+
+    ctx.strokeStyle = ink;
+    inverter(ctx, Math.max(90, W * .08), H * .12, 22);
+    label('fig. 1 — inverter', Math.max(90, W * .08) - 12, H * .12 + 28);
+
+    ctx.strokeStyle = inkDim;
+    dimension(ctx, Math.max(80, W * .07), H * .88, 52);
+    label('45 nm', Math.max(80, W * .07) + 14, H * .88 - 8);
+
+    ctx.strokeStyle = stain; ctx.lineWidth = 3.5;
+    coffeeRing(ctx, rEdge - 60, H * .1, 24);
+
     ctx.restore();
   };
 })();

@@ -9,7 +9,7 @@ export default defineConfig({
   reporter: [['html'], ['list']],
 
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:3000/personal-website/',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -36,7 +36,7 @@ export default defineConfig({
   // Automatically start the dev server before running tests
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:3000',
+    url: 'http://localhost:3000/personal-website',
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   },

@@ -7,7 +7,7 @@ test.describe('Mobile layout', () => {
   test.use({ viewport: { width: 390, height: 844 } }); // iPhone 14 size
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
   });
 
   test('page loads without horizontal overflow', async ({ page }) => {
@@ -46,12 +46,12 @@ test.describe('Desktop layout', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test('right panel is visible on desktop', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     await expect(page.locator('#right-panel')).toBeVisible();
   });
 
   test('content has correct margins on desktop', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     const content = page.locator('#content');
     const box = await content.boundingBox();
     // #content should have margin-left:36 and margin-right:310

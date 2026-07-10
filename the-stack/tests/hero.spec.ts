@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Hero section', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
   });
 
   test('page has correct title', async ({ page }) => {
@@ -17,8 +17,8 @@ test.describe('Hero section', () => {
 
   test('hero tagline contains expected text', async ({ page }) => {
     const tagline = page.locator('.hero-tagline');
-    await expect(tagline).toContainText('Full-stack engineer');
     await expect(tagline).toContainText('45nm CMOS');
+    await expect(tagline).toContainText('production APIs');
   });
 
   test('hero meta shows USC affiliation', async ({ page }) => {

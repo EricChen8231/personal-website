@@ -1,6 +1,6 @@
 import StackClient from '@/components/StackClient';
 
-const MONO = "'Courier New', monospace";
+const MONO = "var(--font-mono, 'Courier New', monospace)";
 
 const STACK_ROWS = [
   ['L7', 'Application', 'end-to-end APIs · ML pipelines · CUDA inference'],
@@ -22,38 +22,56 @@ export default function Page() {
       <StackClient />
       <div id="content">
 
-        {/* ── HERO ── */}
+        {/* ── HERO (editorial lab-notebook page) ── */}
         <section id="hero">
-          <div className="hero-eyebrow">Portfolio · L1 → L7</div>
-          <div className="hero-name">Eric Chen</div>
-          <div className="hero-tagline">
-            <strong>End-to-end engineer</strong> — literally.<br />
-            From 45nm CMOS cells to production APIs.
-          </div>
-          <div className="hero-meta">USC Viterbi · B.S. CECS · M.S. EE</div>
+          <div className="hero-page">
+            <div className="hero-page-head">
+              <span>Field notes — portfolio</span>
+              <span>L1 → L7</span>
+            </div>
 
-          {/* Status row */}
-          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, fontFamily: MONO, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', display: 'inline-block', flexShrink: 0 }} />
-              available for full-time
-            </span>
-            <span style={{ fontSize: 10, color: 'var(--text4)', fontFamily: MONO }}>· Los Angeles, CA</span>
-          </div>
+            <div className="hero-page-body">
+              <div className="hero-eyebrow">Entry · Summer 2026</div>
 
-          {/* Tech tags */}
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 14 }}>
-            {HERO_TAGS.map(t => (
-              <span key={t} className="tag">{t}</span>
-            ))}
-          </div>
+              <div className="hero-name-row">
+                <h1 className="hero-name">Eric Chen</h1>
+                <div className="hero-margin-note">
+                  <div className="note-hire">← available for full-time</div>
+                  <div className="note-loc">Los Angeles, CA</div>
+                </div>
+              </div>
 
-          <div className="hero-divider" />
-          <div className="hero-prompt">
-            <span style={{ color: 'var(--text4)' }}>%</span>
-            <span id="hero-cmd" /><span id="hero-cursor-el" />
+              <div className="hero-tagline">
+                From 45nm CMOS cells to production APIs.
+              </div>
+              <div className="hero-meta">USC Viterbi · B.S. CECS · M.S. EE</div>
+
+              <div className="hero-divider" />
+
+              <div className="hero-skills">{HERO_TAGS.join(' · ')}</div>
+
+              {/* Quick links — always-visible escape hatch, no scrolling or terminal required */}
+              <div className="hero-links">
+                <a href="/personal-website/resume.pdf" target="_blank" rel="noopener noreferrer">Resume</a>
+                <span className="sep">—</span>
+                <a href="mailto:echen823@usc.edu">Email</a>
+                <span className="sep">—</span>
+                <a href="https://linkedin.com/in/ericchen823" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                <span className="sep">—</span>
+                <a href="https://github.com/ericchen8231" target="_blank" rel="noopener noreferrer">GitHub</a>
+              </div>
+
+              <div className="hero-prompt">
+                <span className="prompt-pct">%</span>
+                <span id="hero-cmd" /><span id="hero-cursor-el" />
+              </div>
+            </div>
+
+            <div className="hero-page-foot">
+              <span className="scroll-hint">continue reading ↓</span>
+              <span>fig. 1 — system overview</span>
+            </div>
           </div>
-          <div className="scroll-hint">↓ trace the execution</div>
         </section>
 
         {/* ── NOW ── */}
@@ -61,17 +79,22 @@ export default function Page() {
           <div className="section-inner">
             <div className="layer-tag">Now — <span>Current Work</span></div>
             <div className="section-title">What I&apos;m building</div>
-            <div className="section-sub">spring 2026</div>
+            <div className="section-sub">summer 2026</div>
             <div className="project-list">
               <div className="project-item">
-                <div className="project-name">Training AI Models on Large Codebases</div>
-                <div className="project-tech">Python · PyTorch · Transformers · CUDA</div>
-                <div className="project-desc">Training language models on large-scale codebases for code understanding and generation. Distributed training runs, eval harnesses, the whole deal.</div>
+                <div className="project-name">Development Tools SWE Graduate Intern — Intel</div>
+                <div className="project-tech">Python · Cadence Virtuoso · EDA</div>
+                <div className="project-desc">Developing graph-based algorithms to convert Cadence netlist outputs into structured connectivity features. Engineered global-histogram features and random forest models to predict layer assignments, with automated design-rule checks validating predictions against layout-derived ground truth.</div>
+              </div>
+              <div className="project-item">
+                <div className="project-name">AI Engineer Fellow — Handshake AI</div>
+                <div className="project-tech">Python · PyTorch · Docker · CI/CD</div>
+                <div className="project-desc">Fine-tuning LLMs for code generation via supervised learning on open-source codebases. Curating gold-standard demonstrations for functional correctness and multi-file reasoning, evaluating outputs against benchmarks, and building CI/CD pipelines for autonomous regression testing across model versions.</div>
               </div>
               <div className="project-item">
                 <div className="project-name">Parallel MCCFR — NLH Poker Solver</div>
-                <div className="project-tech">CUDA C++ · OpenMP · A100 GPUs</div>
-                <div className="project-desc">CUDA C++ implementation of External-Sampling MCCFR (CFR+) for No-Limit Texas Hold&apos;em. GPU-batched self-play to train Nash equilibrium strategies.</div>
+                <div className="project-tech">CUDA C++ · cuRAND · OpenMP · MPI · A100 GPUs</div>
+                <div className="project-desc">Poker AI approximating Nash equilibrium via Monte Carlo CFR self-play and Linear CFR+ (the algorithm behind Pluribus). Ported to CUDA C++ for 65k simultaneous games per A100 kernel — high-throughput parallel self-play. Live-play bot with hash-based strategy lookup for sub-microsecond decision latency.</div>
                 <a href="https://github.com/ericchen8231/cuda-mccfr" target="_blank" rel="noopener noreferrer" className="project-link">github ↗</a>
               </div>
               <div className="project-item">
@@ -99,7 +122,7 @@ export default function Page() {
             <div className="section-desc">Production APIs, end-to-end apps, and ML pipelines — the surface where commands enter the machine.</div>
             <div className="project-list">
               <div className="project-item">
-                <div className="project-name">MUJI USA — Backend Intern 2025</div>
+                <div className="project-name">MUJI USA — Technology Intern, 2025</div>
                 <div className="project-tech">Python · REST APIs · PostgreSQL · WMS Integration</div>
                 <div className="project-desc">Built REST APIs syncing e-commerce orders with the WMS — cut p95 order-sync latency 42% across NYC stores. Optimized inventory/allocations queries (3.1× faster, 61% p99 cut). Built idempotent consistency checks and daily data integrity jobs that blocked 1.3k+ bad records/month.</div>
               </div>
@@ -110,8 +133,8 @@ export default function Page() {
               </div>
               <div className="project-item">
                 <div className="project-name">Game Resource Detection — YOLOv11</div>
-                <div className="project-tech">Python · PyTorch · YOLOv11 · OpenCV</div>
-                <div className="project-desc">Custom dataset in Roboflow, trained YOLOv11 for in-game resource detection. Deployed as a real-time overlay for automated gameplay workflows.</div>
+                <div className="project-tech">Python · PyTorch · YOLOv11 · OpenCV · NumPy</div>
+                <div className="project-desc">Annotated a custom multi-class dataset in Roboflow and fine-tuned YOLOv11 for in-game resource detection. Built an OpenCV/NumPy augmentation pipeline (HSV jitter, mosaic, blur) to harden rare-class accuracy, trained with mixed-precision and tuned anchors for real-time inference at native resolution. Packaged as a multi-threaded screen-capture overlay with non-blocking inference for live automated detection.</div>
               </div>
             </div>
           </div>
@@ -126,14 +149,14 @@ export default function Page() {
             <div className="section-desc">Packets, protocols, and the infrastructure connecting systems. Built from scratch to understand what abstractions hide.</div>
             <div className="project-list">
               <div className="project-item">
-                <div className="project-name">Makeshift IP Router</div>
-                <div className="project-tech">C/C++ · Linux Networking · LPM</div>
-                <div className="project-desc">Custom IP router built from scratch — LPM routing table, ARP cache, ICMP handling, and raw packet I/O. Built to understand what the kernel normally hides.</div>
+                <div className="project-name">Makeshift Router</div>
+                <div className="project-tech">C++ · POSIX Threads · Sockets · Network Protocol Design</div>
+                <div className="project-desc">Multi-threaded router simulation handling concurrent packet forwarding, routing, and TTL expiration. Layered protocol stack with checksums, distance-vector routing, and dynamic table updates — socket-based IPC for inter-node communication with custom serialization and timeout handling.</div>
               </div>
               <div className="project-item">
-                <div className="project-name">Networking TA — USC</div>
+                <div className="project-name">Course Producer, CS353 — USC</div>
                 <div className="project-tech">TCP/IP · Routing Protocols · Sockets · Threads</div>
-                <div className="project-desc">Teaching routing protocols (BGP, OSPF, RIP), socket programming from raw BSD sockets up, and multithreaded server design. Office hours for 80+ students.</div>
+                <div className="project-desc">Mentoring students in Intro to Networking through weekly tutoring hours — structured feedback on algorithms and code quality. Collaborating with course staff on routing protocols (BGP, OSPF, RIP) and socket programming curriculum. Office hours for 80+ students.</div>
               </div>
             </div>
           </div>
@@ -297,7 +320,7 @@ export default function Page() {
         </section>
 
         {/* ── FOOTER ── */}
-        <section style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 40px', position: 'relative', zIndex: 5 }}>
+        <footer style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 40px', position: 'relative', zIndex: 5 }}>
           <div style={{ textAlign: 'center', maxWidth: 560, width: '100%' }}>
 
             {/* Layer summary */}
@@ -321,7 +344,7 @@ export default function Page() {
               Let&apos;s build something.
             </div>
             <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 30, lineHeight: 1.7 }}>
-              From bare silicon to production — I work end to end, literally.
+              From bare silicon to production.
             </div>
             <div style={{ display: 'flex', gap: 9, justifyContent: 'center', flexWrap: 'wrap' }}>
               <a href="mailto:echen823@usc.edu"
@@ -342,7 +365,7 @@ export default function Page() {
               </a>
             </div>
           </div>
-        </section>
+        </footer>
 
       </div>
     </>
